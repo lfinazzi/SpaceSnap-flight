@@ -1,0 +1,7 @@
+../Core/Src/command.c:35:6:ReturnCode	152	static
+../Core/Src/command.c:63:18:GetCommand	24	static
+../Core/Src/command.c:75:18:ExecuteCommand	24	static
+../Core/Src/command.c:95:18:CMD_TakePicture	32	static
+../Core/Src/command.c:109:18:CMD_TakePictureDelayed	80	static
+../Core/Src/command.c:124:18:CMD_GetStatus	16	static
+../Core/Src/command.c:134:18:CMD_DumpPictureFrame	256	static

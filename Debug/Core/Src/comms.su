@@ -1,0 +1,7 @@
+../Core/Src/comms.c:16:6:Log	24	static
+../Core/Src/comms.c:30:6:ClearTxBuffer	16	static
+../Core/Src/comms.c:38:6:TransmitBufferUART	8	static
+../Core/Src/comms.c:46:6:TransmitBufferRS485	8	static
+../Core/Src/comms.c:59:6:ResetLS02	8	static
+../Core/Src/comms.c:66:18:LoadInstructionBuffer	152	static
+../Core/Src/comms.c:108:6:HandleIncomingCommand	16	static
