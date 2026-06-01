@@ -119,4 +119,18 @@ CMD_ReturnStatus LoadInstructionBuffer(void);
 void HandleIncomingCommand(app_state_t fallback_state);
 
 
+/********************************************************************************
+ * @brief  Puts RS485 transceiver in high impedance to free the bus
+ *
+ * @param  void
+ *********************************************************************************/
+void DisableRS485(void);
+
+/********************************************************************************
+ * @brief  Puts RS485 transceiver in listening mode
+ *
+ * @param  void
+ *********************************************************************************/
+void EnableListenRS485(void);
+
 #endif

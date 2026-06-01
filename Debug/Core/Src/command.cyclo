@@ -1,7 +1,7 @@
 ../Core/Src/command.c:35:6:ReturnCode	6
 ../Core/Src/command.c:63:18:GetCommand	3
 ../Core/Src/command.c:75:18:ExecuteCommand	3
-../Core/Src/command.c:95:18:CMD_TakePicture	2
-../Core/Src/command.c:109:18:CMD_TakePictureDelayed	1
-../Core/Src/command.c:124:18:CMD_GetStatus	1
-../Core/Src/command.c:134:18:CMD_DumpPictureFrame	13
+../Core/Src/command.c:95:18:CMD_TakePicture	1
+../Core/Src/command.c:108:18:CMD_TakePictureDelayed	1
+../Core/Src/command.c:123:18:CMD_GetStatus	1
+../Core/Src/command.c:133:18:CMD_DumpPictureFrame	13

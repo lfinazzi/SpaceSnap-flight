@@ -117,8 +117,6 @@ void Error_Handler(void);
 #define JTMS_SWDIO_GPIO_Port GPIOA
 #define JTCK_SWCLK_Pin GPIO_PIN_14
 #define JTCK_SWCLK_GPIO_Port GPIOA
-#define JTDI_Pin GPIO_PIN_15
-#define JTDI_GPIO_Port GPIOA
 #define MEMO_OE_Pin GPIO_PIN_4
 #define MEMO_OE_GPIO_Port GPIOD
 #define MEMO_WE_Pin GPIO_PIN_5
@@ -129,10 +127,6 @@ void Error_Handler(void);
 #define MEMO_UB_GPIO_Port GPIOG
 #define MEMO_LB_Pin GPIO_PIN_13
 #define MEMO_LB_GPIO_Port GPIOG
-#define JTDO_TRACESWO_Pin GPIO_PIN_3
-#define JTDO_TRACESWO_GPIO_Port GPIOB
-#define NJTRST_Pin GPIO_PIN_4
-#define NJTRST_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

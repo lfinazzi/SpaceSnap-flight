@@ -38,19 +38,18 @@ void ClearTxBuffer(void)
 void TransmitBufferUART(void)
 {
 	tx_buffer[0] = RESPONSE_INIT_BYTE; 		// An init byte to identify USS responses
-	HAL_UART_Transmit(&huart1, (uint8_t*) tx_buffer, AIRMAC_SIZE, 100);
+	HAL_UART_Transmit(&huart1, (uint8_t*) tx_buffer, AIRMAC_SIZE, 200);
 	ClearTxBuffer();
 }
 
-// TODO: Untested function
 void TransmitBufferRS485(void)
 {
 	tx_buffer[0] = RESPONSE_INIT_BYTE; 										// An init byte to identify USS responses
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);					// RE low
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);						// DE high
-	HAL_UART_Transmit(&huart1, (uint8_t*) tx_buffer, AIRMAC_SIZE, 100);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);						// RE high
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);					// DE low
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);						// RE high (disabled)
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);						// DE high (enabled)
+	HAL_UART_Transmit(&huart1, (uint8_t*) tx_buffer, AIRMAC_SIZE, 200);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);					// RE low (enabled)
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);					// DE low (disabled)
 
 	ClearTxBuffer();
 	ResetLS02();
@@ -66,6 +65,7 @@ void ResetLS02(void)
 CMD_ReturnStatus LoadInstructionBuffer(void)
 {
 	instr_number = rx_buffer[1];
+
 	if (instr_number != CMD_GET_STATUS_ID)							// Saves last command ID
 	        board_status.last_instruction = instr_number;
 	const command_t* cmd = GetCommand(instr_number);
@@ -123,9 +123,25 @@ void HandleIncomingCommand(app_state_t fallback_state)
 	}
 	else{
 	  Log("Received LS-02 command\r\n");
+	  DisableRS485();
 	  if(delayed_flag == 1){ 				// USS was in STATE_DELAYED_PICTURE
 		  Log("Ignoring...\r\n");
 	  }
 	  state = fallback_state;
 	}
 }
+
+void DisableRS485(void)
+{
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET); 	// RE high (disabled)
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);	// DE low (disabled)
+	HAL_UART_AbortReceive(&huart1);							// Aborts UART1 reception
+}
+
+void EnableListenRS485(void)
+{
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);	// RE low (enabled)
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);	// DE low (disabled)
+	HAL_UARTEx_ReceiveToIdle_IT(&huart1, (uint8_t*)rx_buffer, AIRMAC_SIZE+1);  // re-arm UART1
+}
+

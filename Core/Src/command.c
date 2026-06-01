@@ -94,14 +94,13 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
 
 CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 {
-  // Synthetic gradient — replace with Camera_Capture() on final board
   // TODO: Change when boards arrive. Implement opcode to select buffer
-  for (uint32_t i = 0; i < L * H; i++)
-      raw_buffer_1->data[i] = (uint16_t)(i & 0xFFFF);
-  raw_buffer_1->timestamp = HAL_GetTick();
-  raw_buffer_1->designator = board_status.photos_taken;
-  board_status.photos_taken++;
-  board_status.raw_buffer_1_occupied = 1;
+  //for (uint32_t i = 0; i < L * H; i++)
+  //    raw_buffer_1->data[i] = (uint16_t)(i & 0xFFFF);
+  //raw_buffer_1->timestamp = HAL_GetTick();
+  //raw_buffer_1->designator = board_status.photos_taken;
+  //board_status.photos_taken++;
+  //board_status.raw_buffer_1_occupied = 1;
   return CMD_OK;
 }
 

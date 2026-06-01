@@ -128,6 +128,25 @@ int main(void)
   HAL_UARTEx_ReceiveToIdle_IT(&huart1, (uint8_t*) rx_buffer, AIRMAC_SIZE+1);		// Arms UART1 for IT reception
   AssignSRAMMemory();																// Assigns SRAM pointers
   GPIO_Init();
+
+  // TODO: USS RST DEBUG, REMOVE
+
+  // --- TEMPORARY TEST ---
+  HAL_Delay(3000);                              // 3s to open your terminal
+  HAL_NVIC_SetPendingIRQ(EXTI9_5_IRQn);        // Fake-fire the interrupt
+  HAL_Delay(100);                               // Let ISR execute
+
+  if(uss_comm_reset == 1)
+      Log(">>> ISR WORKS: uss_comm_reset was set\r\n");
+  else
+      Log(">>> ISR BROKEN: uss_comm_reset still 0\r\n");
+  // --- END TEST ---
+
+  // TODO: test for SRAM
+  //uint16_t a[4] = {12, 13, 14, 15};
+  //memcpy(compressed_photos, &a, 4);
+  //uint16_t b = compressed_photos[2];
+
   //HAL_SPI_TransmitReceive(&hspi2, test_tx, test_rx, 5, 100);						// TODO: This worked for SPI loopback in debug board
   /* USER CODE END 2 */
 
@@ -145,10 +164,11 @@ int main(void)
 			  }
 			  break;
 
-		  case STATE_IGNORE:														// TODO: Might be a bug where RS485 auto-resets. Check on definitive boards
+		  case STATE_IGNORE:														// TODO: Might be a bug where RS485 auto-resets.
 			  if(ignore_flag == 0)													// Only transmit buffer first time this is executed
 			  {
 				  Log("Waiting for reset\r\n");										// Return for DEB-UART for user to know IGNORE was reached
+				  DisableRS485();
 				  ignore_flag = 1;
 			  }
 
@@ -157,9 +177,10 @@ int main(void)
 				  uss_comm_reset = 0;
 				  Log("Reset received! Listening to next command\r\n");
 				  Log("---------------------------------------------------\r\n");
-			  rx_flag = 0; 															// to avoid receiving something while blocked
+				  rx_flag = 0; 															// to avoid receiving something while blocked
 				  state = STATE_IDLE;
 				  ignore_flag = 0;
+				  EnableListenRS485();
 			  }
 			  break;
 
@@ -177,7 +198,7 @@ int main(void)
 		  case STATE_DELAYED_PICTURE:
 			  if(delayed_flag == 0)									// Only transmit buffer first time this is executed
 			  {
-				  TransmitBufferUART();								// Return for OBC, indicating command scheduled if everything ok
+				  TransmitBufferRS485();							// Return for OBC, indicating command scheduled if everything ok
 				  delayed_flag = 1;
 			  }
 
@@ -203,7 +224,7 @@ int main(void)
 		  case STATE_TRANSMIT_RESPONSE:
 			  Log("Transmitting buffer\r\n");
 			  Log("---------------------------------------------------\r\n");
-			  TransmitBufferUART();				// Transmits tx_buffer
+			  TransmitBufferRS485();			// Transmits tx_buffer
 			  ResetLS02();						// Re-activates LS-02 for next incoming instruction
 			  state = STATE_IDLE;
 			  break;
@@ -489,7 +510,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
+  huart1.Init.BaudRate = 9600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -557,17 +578,24 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : RS485_RE_Pin RS485_DE_Pin CS_N_Pin */
-  GPIO_InitStruct.Pin = RS485_RE_Pin|RS485_DE_Pin|CS_N_Pin;
+  /*Configure GPIO pins : RS485_RE_Pin RS485_DE_Pin */
+  GPIO_InitStruct.Pin = RS485_RE_Pin|RS485_DE_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : CS_N_Pin */
+  GPIO_InitStruct.Pin = CS_N_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(CS_N_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : USS_RS485_RST_Pin */
   GPIO_InitStruct.Pin = USS_RS485_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(USS_RS485_RST_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : MEMO_UB_Pin MEMO_LB_Pin */

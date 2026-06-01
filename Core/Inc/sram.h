@@ -14,6 +14,8 @@
 // Start of compressed photo space
 #define COMPRESSED_DATA_BASE_ADDRESS 			((COMPRESSED_METADATA_BASE_ADDRESS) + (MAX_COMPRESSED_PHOTOS * sizeof(compressed_metadata_t)))
 
+// TODO: check EOM calculation
+#define END_OF_MEMORY							(0x60FA0000U)
 
 extern volatile raw_photo_t* raw_buffer_1;					// Raw photo buffer number 1
 extern volatile raw_photo_t* raw_buffer_2;					// Raw photo buffer number 2

@@ -10,7 +10,7 @@
  *           - PB0  : RS-485 RE (Receiver Enable) — HIGH (receiver disabled)
  *           - PB1  : RS-485 DE (Driver Enable)   — LOW  (driver disabled)
  *
- * @ TODO   Extend with remaining GPIO initializations as peripherals are added.
+ * @ TODO   Complete this comment with all GPIOs
  *********************************************************************************/
 void GPIO_Init(void);
 
