@@ -1,0 +1,2 @@
+../Core/Src/status.c:15:6:UpdateStatus	8	static
+../Core/Src/status.c:22:6:LogBoardStatus	104	static

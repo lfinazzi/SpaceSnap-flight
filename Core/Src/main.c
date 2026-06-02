@@ -95,6 +95,8 @@ int main(void)
   delayed_flag = 0;									// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
 
   ignore_flag = 0;
+
+  uint32_t timeout_start = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -129,29 +131,16 @@ int main(void)
   AssignSRAMMemory();																// Assigns SRAM pointers
   GPIO_Init();
 
-  // TODO: USS RST DEBUG, REMOVE
+  TestFRAM();																		// Tests integrity of FRAM
+  LoadBoardStatusFRAM();															// Loads board status saved in FRAM
 
-  // --- TEMPORARY TEST ---
-  HAL_Delay(3000);                              // 3s to open your terminal
-  HAL_NVIC_SetPendingIRQ(EXTI9_5_IRQn);        // Fake-fire the interrupt
-  HAL_Delay(100);                               // Let ISR execute
+  LogBoardStatus();																	// Logs current status to UART4 (debug)
 
-  if(uss_comm_reset == 1)
-      Log(">>> ISR WORKS: uss_comm_reset was set\r\n");
-  else
-      Log(">>> ISR BROKEN: uss_comm_reset still 0\r\n");
-  // --- END TEST ---
-
-  // TODO: test for SRAM
-  //uint16_t a[4] = {12, 13, 14, 15};
-  //memcpy(compressed_photos, &a, 4);
-  //uint16_t b = compressed_photos[2];
-
-  //HAL_SPI_TransmitReceive(&hspi2, test_tx, test_rx, 5, 100);						// TODO: This worked for SPI loopback in debug board
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  Log("---------------------------------------------------\r\n");
   while (1)
   {
 	  HAL_IWDG_Refresh(&hiwdg); 													// Kick the IWDG once per loop
@@ -165,17 +154,18 @@ int main(void)
 			  break;
 
 		  case STATE_IGNORE:														// TODO: Might be a bug where RS485 auto-resets.
+
 			  if(ignore_flag == 0)													// Only transmit buffer first time this is executed
 			  {
 				  Log("Waiting for reset\r\n");										// Return for DEB-UART for user to know IGNORE was reached
 				  DisableRS485();
+				  timeout_start = HAL_GetTick();									// Register starting time
 				  ignore_flag = 1;
 			  }
 
-			  // Waiting for HW reset from LS02 - Using non-blocking (no while)
-			  if(uss_comm_reset == 1){    // GPIO Interrupt received, TODO: implement a timeout to get out of this state if LS-02 hangs
-				  uss_comm_reset = 0;
-				  Log("Reset received! Listening to next command\r\n");
+			  // Waiting for HW reset from LS02 - Using non-blocking (no while) - or timeout
+			  if(PollUSSReset() || HAL_GetTick() - timeout_start >= (uint32_t)IGNORE_TIMEOUT_MAX){    // GPIO reset high --> reactivate reception (or timeout)
+				  Log("Leaving IGNORE mode.\r\n");
 				  Log("---------------------------------------------------\r\n");
 				  rx_flag = 0; 															// to avoid receiving something while blocked
 				  state = STATE_IDLE;
@@ -236,6 +226,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	UpdateStatus();					// TODO: updates uptime_ms for now, add accordingly
+	SaveBoardStatusFRAM();			// TODO: Saves the status to FRAM, is this too slow to save on every iteration?
   }
   /* USER CODE END 3 */
 }
@@ -594,7 +586,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : USS_RS485_RST_Pin */
   GPIO_InitStruct.Pin = USS_RS485_RST_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(USS_RS485_RST_GPIO_Port, &GPIO_InitStruct);
 
@@ -604,10 +596,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -641,16 +629,16 @@ static void MX_FSMC_Init(void)
   hsram1.Init.WaitSignalPolarity = FSMC_WAIT_SIGNAL_POLARITY_LOW;
   hsram1.Init.WrapMode = FSMC_WRAP_MODE_DISABLE;
   hsram1.Init.WaitSignalActive = FSMC_WAIT_TIMING_BEFORE_WS;
-  hsram1.Init.WriteOperation = FSMC_WRITE_OPERATION_DISABLE;
+  hsram1.Init.WriteOperation = FSMC_WRITE_OPERATION_ENABLE;
   hsram1.Init.WaitSignal = FSMC_WAIT_SIGNAL_DISABLE;
   hsram1.Init.ExtendedMode = FSMC_EXTENDED_MODE_DISABLE;
   hsram1.Init.AsynchronousWait = FSMC_ASYNCHRONOUS_WAIT_DISABLE;
   hsram1.Init.WriteBurst = FSMC_WRITE_BURST_DISABLE;
   /* Timing */
-  Timing.AddressSetupTime = 15;
+  Timing.AddressSetupTime = 0;
   Timing.AddressHoldTime = 15;
-  Timing.DataSetupTime = 255;
-  Timing.BusTurnAroundDuration = 15;
+  Timing.DataSetupTime = 3;
+  Timing.BusTurnAroundDuration = 1;
   Timing.CLKDivision = 16;
   Timing.DataLatency = 17;
   Timing.AccessMode = FSMC_ACCESS_MODE_A;

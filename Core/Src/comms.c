@@ -145,3 +145,15 @@ void EnableListenRS485(void)
 	HAL_UARTEx_ReceiveToIdle_IT(&huart1, (uint8_t*)rx_buffer, AIRMAC_SIZE+1);  // re-arm UART1
 }
 
+// TODO: This function still doesn't work. Why can't I drive the GPIO pin HIGH and the STM32 measure it?
+int PollUSSReset(void)
+{
+	// Raw GPIO
+	GPIO_PinState raw = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8);
+	if (raw == GPIO_PIN_RESET) {
+		return 0;  // Pin is low, don't even start debounce
+	}
+	else
+		return 1;
+}
+

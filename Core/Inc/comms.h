@@ -10,6 +10,9 @@
 
 #define LOG_UART_TIMEOUT					(50U)		// Debug UART timeout in ms
 
+#define IGNORE_TIMEOUT_MAX					(20000U) 	// max timeout for LS-02 reset in ms
+#define RESET_DEBOUNCE_TIME					(10U) 		// debounce time to avoid GPIO noise in ms
+
 extern volatile uint8_t rx_buffer[AIRMAC_SIZE+1]; 		// EnduroSat RS-485 incoming buffer
 extern uint8_t tx_buffer[AIRMAC_SIZE];					// EnduroSat RS-485 outgoing buffer
 extern uint8_t instr_number;							// Current instruction number
@@ -17,8 +20,6 @@ extern uint8_t instr_opcode[OPCODE_SIZE];				// Current instruction opcode
 
 extern volatile uint8_t rx_flag;						// Flag for new incoming message
 extern volatile uint16_t rx_size;						// size of incoming message through RS-485
-
-extern volatile uint8_t uss_comm_reset;					// LS-02 input reset
 
 
 // State machine states for program flow
@@ -132,5 +133,14 @@ void DisableRS485(void);
  * @param  void
  *********************************************************************************/
 void EnableListenRS485(void);
+
+/********************************************************************************
+ * @brief  Polls USS RS485 reset GPIO (PA8) every program cycle
+ *
+ * @param  void
+ *
+ * @return 0 if pin is low, 1 if pin is high
+ *********************************************************************************/
+int PollUSSReset(void);
 
 #endif

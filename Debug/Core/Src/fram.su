@@ -1,0 +1,5 @@
+../Core/Src/fram.c:5:6:FRAM_WriteByte	24	static
+../Core/Src/fram.c:26:9:FRAM_ReadByte	24	static
+../Core/Src/fram.c:43:6:TestFRAM	112	static
+../Core/Src/fram.c:69:6:SaveBoardStatusFRAM	16	static
+../Core/Src/fram.c:80:6:LoadBoardStatusFRAM	24	static

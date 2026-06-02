@@ -32,6 +32,4 @@ void GPIO_Init(void)
 	  // MEMO_LB, low on startup
 	  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_13, GPIO_PIN_RESET);
 
-
-
 }

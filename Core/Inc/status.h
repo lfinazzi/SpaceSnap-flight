@@ -7,7 +7,8 @@
 typedef struct {
     // Power-on info
     uint32_t uptime_ms;                  // HAL_GetTick()
-    uint32_t boot_count;                 // incremented on every reset, stored in FRAM, TODO: implement boot count
+    uint32_t total_uptime; 				 // Total cumulative uptime
+    uint32_t boot_count;                 // incremented on every reset, stored in FRAM
 
     // Last command
     uint8_t  last_instruction;           // last instruction number received
@@ -18,6 +19,8 @@ typedef struct {
     uint16_t photos_taken;               // total raw photos taken
     uint16_t compressions_done;          // total compressions performed
     uint16_t compressed_count;           // compressions currently in memory
+
+    // TODO: Add: Current memory pointer to save next compression, other?
 
     // Memory status
     uint32_t compressed_data_ptr;        // current write pointer in compressed space
@@ -38,5 +41,26 @@ extern char timestamp_string[15];		  // String to hold timestamp. Format: "[HH:M
 extern uint32_t hours;					  // Hours elapsed
 extern uint32_t minutes;				  // Minutes elapsed
 extern uint32_t seconds;				  // Seconds elapsed
+
+
+/********************************************************************************
+ * @brief  Updates the global board_status struct with the latest system state.
+ *
+ * @note   Reads current values from system variables and writes them into the
+ *         global board_status_t instance. Should be called before any operation
+ *         that transmits or saves board status, such as responding to a
+ *         telemetry request or calling SaveBoardStatusFRAM().
+ ********************************************************************************/
+void UpdateStatus(void);
+
+/********************************************************************************
+ * @brief  Logs a summary of the restored board status on bootup.
+ *
+ * @note   Should be called once during initialization after LoadBoardStatusFRAM().
+ *         Prints boot count, uptime from last session, total photos taken and
+ *         compressions performed.
+ ********************************************************************************/
+void LogBoardStatus(void);
+
 
 #endif

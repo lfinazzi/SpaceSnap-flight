@@ -2,10 +2,11 @@
 #define __SRAM_H__
 
 #include "photo.h"
+#include "main.h"
 
 #include <stdint.h>
 
-#define RAW_PHOTO_BASE_ADDRESS 		  	 		(0x60000000U)									// NOR SRAM BANK 1 - Start of raw buffers
+#define RAW_PHOTO_BASE_ADDRESS 		  	 		(0x68000000U)									// NOR SRAM BANK 1 - Start of raw buffers
 #define RAW_PHOTO_SIZE 		  	 				sizeof(raw_photo_t)								// Full struct size: header + pixel data of raw photo
 
 #define MAX_COMPRESSED_PHOTOS			 		(100U)											// Maximum number of compressions possible
@@ -28,11 +29,14 @@ extern uint16_t *compressed_photos;							// Pointer to first EMPTY compressed s
 
 /********************************************************************************
  * @brief  Assigns fixed SRAM addresses to the pointers used for photo storage.
+ *  	   Also check SRAM integrity writing and reading three memory values in
+ *  	   compressed photo space.
  *
  * @note   Must be called once before any photo capture or buffer access.
  *         Pointers are mapped to static SRAM regions; no dynamic allocation
  *         is performed.
  *********************************************************************************/
 void AssignSRAMMemory(void);
+
 
 #endif

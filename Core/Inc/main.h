@@ -104,7 +104,6 @@ void Error_Handler(void);
 #define LS02_RS485_RST_GPIO_Port GPIOC
 #define USS_RS485_RST_Pin GPIO_PIN_8
 #define USS_RS485_RST_GPIO_Port GPIOA
-#define USS_RS485_RST_EXTI_IRQn EXTI9_5_IRQn
 #define UART1_TX_Pin GPIO_PIN_9
 #define UART1_TX_GPIO_Port GPIOA
 #define UART1_RX_Pin GPIO_PIN_10
