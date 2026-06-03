@@ -41,6 +41,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 DCMI_HandleTypeDef hdcmi;
+DMA_HandleTypeDef hdma_dcmi;
 
 I2C_HandleTypeDef hi2c2;
 
@@ -63,6 +64,7 @@ app_state_t state = STATE_IDLE;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_UART4_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_USART1_UART_Init(void);
@@ -117,6 +119,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_UART4_Init();
   MX_DCMI_Init();
   MX_USART1_UART_Init();
@@ -128,13 +131,58 @@ int main(void)
   /* USER CODE BEGIN 2 */
   Log("UNSAM SpaceSnap initializing...\r\n");
   HAL_UARTEx_ReceiveToIdle_IT(&huart1, (uint8_t*) rx_buffer, AIRMAC_SIZE+1);		// Arms UART1 for IT reception
-  AssignSRAMMemory();																// Assigns SRAM pointers
-  GPIO_Init();
+
+  // TODO: Assign status of all peripherals to board_status_t
+  AssignSRAMMemory();																// Assigns SRAM pointers and runs integrity test
+  GPIO_Init();																		// GPIO default config on startup
 
   TestFRAM();																		// Tests integrity of FRAM
   LoadBoardStatusFRAM();															// Loads board status saved in FRAM
 
   LogBoardStatus();																	// Logs current status to UART4 (debug)
+
+  /* Read GPIOA MODER to verify PA6 is in AF mode */
+  /* MODER bits [13:12] control PA6               */
+  /* 00=input, 01=output, 10=AF, 11=analog        */
+  uint32_t gpioa_moder = GPIOA->MODER;
+  uint32_t pa6_mode = (gpioa_moder >> 12) & 0x03;
+  char moder_buf[48];
+  snprintf(moder_buf, sizeof(moder_buf),
+           "PA6 mode = %lu (expected 2=AF)\r\n", pa6_mode);
+  Log(moder_buf);
+
+  /* Also check PA4 (HSYNC) bits [9:8] */
+  uint32_t pa4_mode = (gpioa_moder >> 8) & 0x03;
+  snprintf(moder_buf, sizeof(moder_buf),
+           "PA4 mode = %lu (expected 2=AF)\r\n", pa4_mode);
+  Log(moder_buf);
+
+  /* Check PB7 (VSYNC) in GPIOB MODER bits [15:14] */
+  uint32_t gpiob_moder = GPIOB->MODER;
+  uint32_t pb7_mode = (gpiob_moder >> 14) & 0x03;
+  snprintf(moder_buf, sizeof(moder_buf),
+           "PB7 mode = %lu (expected 2=AF)\r\n", pb7_mode);
+  Log(moder_buf);
+
+  /* Check AFRL/AFRH registers to confirm AF13 is selected */
+
+  /* PA4 is in AFRL [19:16] */
+  uint32_t pa4_af = (GPIOA->AFR[0] >> 16) & 0x0F;
+  snprintf(moder_buf, sizeof(moder_buf),
+           "PA4 AF = %lu (expected 13)\r\n", pa4_af);
+  Log(moder_buf);
+
+  /* PA6 is in AFRL [27:24] */
+  uint32_t pa6_af = (GPIOA->AFR[0] >> 24) & 0x0F;
+  snprintf(moder_buf, sizeof(moder_buf),
+           "PA6 AF = %lu (expected 13)\r\n", pa6_af);
+  Log(moder_buf);
+
+  /* PB7 is in AFRL [31:28] */
+  uint32_t pb7_af = (GPIOB->AFR[0] >> 28) & 0x0F;
+  snprintf(moder_buf, sizeof(moder_buf),
+           "PB7 AF = %lu (expected 13)\r\n", pb7_af);
+  Log(moder_buf);
 
   /* USER CODE END 2 */
 
@@ -266,7 +314,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV8;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
   {
@@ -291,7 +339,7 @@ static void MX_DCMI_Init(void)
   /* USER CODE END DCMI_Init 1 */
   hdcmi.Instance = DCMI;
   hdcmi.Init.SynchroMode = DCMI_SYNCHRO_HARDWARE;
-  hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_FALLING;
+  hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_RISING;
   hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_LOW;
   hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_LOW;
   hdcmi.Init.CaptureRate = DCMI_CR_ALL_FRAME;
@@ -427,22 +475,22 @@ static void MX_TIM11_Init(void)
   htim11.Instance = TIM11;
   htim11.Init.Prescaler = 0;
   htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim11.Init.Period = 65535;
+  htim11.Init.Period = 3;
   htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim11) != HAL_OK)
   {
     Error_Handler();
   }
-  if (HAL_TIM_OC_Init(&htim11) != HAL_OK)
+  if (HAL_TIM_PWM_Init(&htim11) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_TIMING;
-  sConfigOC.Pulse = 0;
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 2;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_OC_ConfigChannel(&htim11, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim11, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -520,6 +568,22 @@ static void MX_USART1_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream1_IRQn, 1, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream1_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -542,16 +606,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(RESET_BAR_GPIO_Port, RESET_BAR_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOC, RESET_BAR_Pin|LS02_RS485_RST_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, IMG_ENA_A_Pin|IMG_ENA_B_Pin|IMG_I2C_ENA_Pin|IMG_ENA_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, RS485_RE_Pin|RS485_DE_Pin|CS_N_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LS02_RS485_RST_GPIO_Port, LS02_RS485_RST_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOG, MEMO_UB_Pin|MEMO_LB_Pin, GPIO_PIN_RESET);

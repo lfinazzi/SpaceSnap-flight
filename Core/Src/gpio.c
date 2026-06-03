@@ -24,6 +24,9 @@ void GPIO_Init(void)
 	  // IMG_ENA_B
 	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET);
 
+	  // RESET_BAR, shared by two cameras! TODO: Implement protection so that it is always low on turning on a sensor
+	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);		// only turn on after power rails have stabilized!
+
 	  // UP, LB low allows SRAM to operate in 16b mode
 
 	  // MEMO_UB, low on startup

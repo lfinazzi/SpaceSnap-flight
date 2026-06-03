@@ -5,52 +5,69 @@
 #include <stddef.h>
 #include <stdio.h>
 
-volatile raw_photo_t* raw_buffer_1 = NULL;
-volatile raw_photo_t* raw_buffer_2 = NULL;
-volatile raw_photo_t* raw_buffer_3 = NULL;
-compressed_metadata_t* compressed_metadata = NULL;
-uint16_t compressed_count = 0;
-uint16_t* compressed_photos = NULL;
+
+uint16_t compressed_count;       // number of compressed images stored
+uint8_t  *compressed_next;       // pointer to next free byte in
 
 void AssignSRAMMemory(void)
 {
-	// Raw photo buffers — laid out sequentially in external NOR SRAM Bank 1
-	raw_buffer_1 = (volatile raw_photo_t*) RAW_PHOTO_BASE_ADDRESS;
-	raw_buffer_2 = (volatile raw_photo_t*)(RAW_PHOTO_BASE_ADDRESS + sizeof(raw_photo_t));
-	raw_buffer_3 = (volatile raw_photo_t*)(RAW_PHOTO_BASE_ADDRESS + 2*sizeof(raw_photo_t));
+	char     log_buf[64];
+	uint8_t  ok = 1;
 
-	// Compressed metadata array: MAX_COMPRESSED_PHOTOS entries
-	compressed_metadata = (compressed_metadata_t*) COMPRESSED_METADATA_BASE_ADDRESS;
+	Log("Initialising SRAM...\r\n");
 
-	// Compressed photo data: contiguous region after metadata
-	compressed_photos = (uint16_t*) COMPRESSED_DATA_BASE_ADDRESS;
+	/* ---- 1. Integrity test ---------------------------------------- */
+	/* Test start, middle and end of compressed pool only.             */
+	/* Raw buffers and metadata region are not touched here to avoid   */
+	/* corrupting valid data on a warm reset.                          */
+	uint32_t test_addrs[3] = {
+		COMPRESSED_DATA_BASE_ADDRESS,
+		COMPRESSED_DATA_BASE_ADDRESS + (COMPRESSED_POOL_SIZE / 2),
+		SRAM_END_ADDRESS - 2U
+	};
+	uint16_t test_vals[3] = {0xAA55, 0x1234, 0x55AA};
 
-	// Initialise write pointer in board status
-	board_status.compressed_data_ptr = (uint32_t) COMPRESSED_DATA_BASE_ADDRESS;
+	/* Write test pattern */
+	for (int i = 0; i < 3; i++) {
+		*((volatile uint16_t *)test_addrs[i]) = test_vals[i];
+	}
 
-	Log("SRAM buffers allocated\r\n");
-
-	char log_buf[64];
-	uint8_t ok = 1;
-
-	// Test start, middle and end of SRAM
-	uint32_t offsets[3] = {0x000000, 0x100000, 0x1FFFFF};
-	uint16_t values[3]  = {0xAA55,   0x1234,   0x55AA  };
-
-	for(int i = 0; i < 3; i++)
-		compressed_photos[offsets[i]] = values[i];									// Writes three addresses in
-
-	for(int i = 0; i < 3; i++)
-	{
-		if(compressed_photos[offsets[i]] != values[i])
-		{
-			sprintf(log_buf, "SRAM FAIL at 0x%06lX: wrote 0x%04X read 0x%04X\r\n",
-					offsets[i], values[i], compressed_photos[offsets[i]]);			// Reads them to check if they are the same
+	/* Read back and verify */
+	for (int i = 0; i < 3; i++) {
+		uint16_t readback = *((volatile uint16_t *)test_addrs[i]);
+		if (readback != test_vals[i]) {
+			snprintf(log_buf, sizeof(log_buf),
+					 "SRAM FAIL at 0x%08lX: wrote 0x%04X read 0x%04X\r\n",
+					 test_addrs[i], test_vals[i], readback);
 			Log(log_buf);
 			ok = 0;
 		}
 	}
 
-	if(ok) Log("SRAM integrity OK\r\n");
+	/* Clear test locations regardless of result */
+	for (int i = 0; i < 3; i++) {
+		*((volatile uint16_t *)test_addrs[i]) = 0x0000;
+	}
 
+	if (!ok) {
+		Log("SRAM integrity FAILED\r\n");
+		return;
+	}
+	Log("SRAM integrity OK\r\n");
+
+	/* ---- 2. Clear metadata pool ----------------------------------- */
+	memset((void *)COMPRESSED_METADATA_BASE_ADDRESS,
+		   0x00,
+		   COMPRESSED_METADATA_POOL_SIZE);
+
+	/* ---- 3. Initialise runtime state ------------------------------ */
+	compressed_count                  = 0;
+	board_status.compressed_data_ptr  = COMPRESSED_DATA_BASE_ADDRESS;
+
+	snprintf(log_buf, sizeof(log_buf),
+			 "SRAM OK — compressed pool: %lu bytes available\r\n",
+			 (uint32_t)COMPRESSED_POOL_SIZE);
+	Log(log_buf);
+
+	return;
 }

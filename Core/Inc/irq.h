@@ -22,6 +22,68 @@
  *********************************************************************************/
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
 
+/********************************************************************************
+ * @brief  DCMI global interrupt handler.
+ *
+ * @note   Handles DCMI peripheral interrupts including frame capture complete,
+ *         VSYNC events, line events, and FIFO overrun errors. Delegates
+ *         entirely to HAL_DCMI_IRQHandler() which in turn fires the
+ *         appropriate HAL callbacks:
+ *           HAL_DCMI_FrameEventCallback() on frame complete
+ *           HAL_DCMI_ErrorCallback()      on FIFO overrun or sync error
+ *         Both callbacks are overridden in photo.c to set dcmi_frame_ready
+ *         and dcmi_error flags respectively, which are polled by
+ *         Photo_CaptureRaw() in the main execution context.
+ ********************************************************************************/
+void DCMI_IRQHandler(void);
 
+/********************************************************************************
+ * @brief  DMA2 Stream1 global interrupt handler.
+ *
+ * @note   Handles DMA transfer interrupts for the DCMI peripheral. DMA2
+ *         Stream1 is configured to transfer 32-bit words from the DCMI
+ *         data register directly to the target raw_photo_t.data[] buffer
+ *         in external SRAM via FSMC. Delegates entirely to
+ *         HAL_DMA_IRQHandler() which manages half-transfer, transfer
+ *         complete and transfer error events. Transfer complete triggers
+ *         HAL_DCMI_FrameEventCallback() via the DCMI-DMA linkage
+ *         established by __HAL_LINKDMA() during initialisation.
+ ********************************************************************************/
+void DMA2_Stream1_IRQHandler(void);
+
+/********************************************************************************
+ * @brief  HAL callback fired when DMA has transferred a complete frame
+ *         into the target SRAM buffer.
+ *
+ * @note   Overrides the HAL weak definition. Sets dcmi_frame_ready = 1 to
+ *         signal Photo_CaptureRaw() that the frame is complete and the
+ *         raw_photo_t.data[] buffer in SRAM is valid and ready for
+ *         processing or compression. Called from DMA2_Stream1_IRQHandler
+ *         via the HAL DMA-DCMI linkage. Keep ISR body minimal — no
+ *         blocking calls, no HAL delays, no UART logging.
+ *
+ * @param  hdcmi   Pointer to the DCMI handle (hdcmi, defined in main.c).
+ ********************************************************************************/
+void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi);
+
+/********************************************************************************
+ * @brief  HAL callback fired on DCMI FIFO overrun or synchronisation error.
+ *
+ * @note   Overrides the HAL weak definition. Sets dcmi_error = 1 and calls
+ *         HAL_DCMI_Stop() to halt the DCMI peripheral cleanly. The error
+ *         flag is checked by Photo_CaptureRaw() which will return HAL_ERROR
+ *         to the caller. A FIFO overrun typically indicates the DMA cannot
+ *         drain the DCMI FIFO fast enough — check FSMC timing and DMA
+ *         priority settings if this fires during normal operation.
+ *         Called from DCMI_IRQHandler via HAL_DCMI_IRQHandler().
+ *         Keep ISR body minimal — no blocking calls, no UART logging.
+ *
+ * @param  hdcmi   Pointer to the DCMI handle (hdcmi, defined in main.c).
+ ********************************************************************************/
+void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi);
+
+/* Flags set by DCMI callbacks, polled by Photo_CaptureRaw()          */
+extern volatile uint8_t dcmi_frame_ready;   // 1 = frame complete in SRAM
+extern volatile uint8_t dcmi_error;         // 1 = FIFO overrun or sync error
 
 #endif

@@ -1,0 +1,12 @@
+../Core/Src/photo.c:15:6:CAM_ResetAssert	1
+../Core/Src/photo.c:20:6:CAM_ResetRelease	1
+../Core/Src/photo.c:28:6:ActivateCAMA	2
+../Core/Src/photo.c:66:6:ActivateCAMB	2
+../Core/Src/photo.c:102:6:DeactivateCAMA	1
+../Core/Src/photo.c:135:6:DeactivateCAMB	1
+../Core/Src/photo.c:157:19:CAM_WriteReg	1
+../Core/Src/photo.c:173:19:CAM_ReadReg	1
+../Core/Src/photo.c:189:19:Camera_CommsTest	4
+../Core/Src/photo.c:219:26:CAM_WriteVerify	5
+../Core/Src/photo.c:248:19:ASX340AT_Init	6
+../Core/Src/photo.c:336:19:Photo_CaptureRaw	7

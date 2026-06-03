@@ -10,6 +10,7 @@
 
 #include "stm32f2xx_hal.h"
 
+extern IWDG_HandleTypeDef hiwdg;
 
 // Command table — add new entries here, matching the extern declaration in command.h
 const command_t command_table[] = {
@@ -55,6 +56,9 @@ void ReturnCode(CMD_ReturnStatus st)
 	else if (st == CMD_BUFFER_OOB) {
 		tx_buffer[1] = COMMAND_BUFFER_OUT_OF_BOUNDS;
 	}
+	else if (st == CMD_CAM_BOOT_ERROR) {
+		tx_buffer[1] = COMMAND_CAM_BOOT_ERROR;
+	}
 	// TODO: when implementing Commands, different runtime errors will be handled here! Add accordingly.
 }
 
@@ -94,14 +98,160 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
 
 CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 {
-  // TODO: Change when boards arrive. Implement opcode to select buffer
-  //for (uint32_t i = 0; i < L * H; i++)
-  //    raw_buffer_1->data[i] = (uint16_t)(i & 0xFFFF);
-  //raw_buffer_1->timestamp = HAL_GetTick();
-  //raw_buffer_1->designator = board_status.photos_taken;
-  //board_status.photos_taken++;
-  //board_status.raw_buffer_1_occupied = 1;
-  return CMD_OK;
+	// TODO: Opcode parsing
+
+	// TODO: For now, turns CAMB (using it for debug)
+	ActivateCAMB();
+
+	char log_buf[64];
+
+
+    /* Functionality test — verify sensor responded correctly on boot */
+    if (Camera_CommsTest(CAM_I2C_ADDR_B) != HAL_OK) {
+        Log("CAMB: boot test FAILED\r\n");
+        DeactivateCAMB();
+        return CMD_CAM_BOOT_ERROR;
+    }
+
+    if (ASX340AT_Init(CAM_I2C_ADDR_B) != HAL_OK) {
+        Log("CAMB: init FAILED\r\n");
+        DeactivateCAMB();
+        return CMD_CAM_BOOT_ERROR;
+    }
+    Log("CAMB: boot test OK\r\n");				// only tries to read some camera registers to check successful boot
+
+
+    uint16_t r0030, r0032;
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x0030, &r0030);
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x0032, &r0032);
+    snprintf(log_buf, sizeof(log_buf),
+             "0030=0x%04X 0032=0x%04X\r\n", r0030, r0032);
+    Log(log_buf);
+
+    /* Read cam_port_parallel_control to confirm parallel port enabled */
+    uint16_t reg_val = 0;
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0xC972, &reg_val);
+
+    snprintf(log_buf, sizeof(log_buf), "CAM: C972 = 0x%04X\r\n", reg_val);
+    Log(log_buf);
+    // Expected: 0x0003 (port enabled, interlaced)
+
+    /* Read DCMI CR register to confirm DCMI is enabled */
+    snprintf(log_buf, sizeof(log_buf),
+             "DCMI CR = 0x%08lX\r\n", (uint32_t)DCMI->CR);
+    Log(log_buf);
+    // Bit 14 (ENABLE) should be 1 after HAL_DCMI_Start_DMA
+
+    /* Read sensor streaming status */
+    uint16_t status_val = 0;
+
+    /* Read DCMI_SR — DCMI status register, shows live pin states */
+    snprintf(log_buf, sizeof(log_buf),
+             "DCMI SR = 0x%08lX\r\n", (uint32_t)DCMI->SR);
+    Log(log_buf);
+    /* Bit 0 HSYNC: current state of HSYNC pin
+       Bit 1 VSYNC: current state of VSYNC pin
+       Bit 2 FNE:   FIFO not empty */
+
+    /* Read sensor monitor variables */
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x8000, &status_val);  // mon_major_version
+    snprintf(log_buf, sizeof(log_buf),
+             "CAM MON: 0x%04X\r\n", status_val);
+    Log(log_buf);
+
+    /* Read ae_track_zone — tells us if AE is running */
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0xA81B, &status_val);
+    snprintf(log_buf, sizeof(log_buf),
+             "CAM AE zone: 0x%04X\r\n", status_val);
+    Log(log_buf);
+
+    /* Read cam_frame_scan_control to confirm scan mode */
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0xC858, &status_val);
+    snprintf(log_buf, sizeof(log_buf),
+             "CAM C858: 0x%04X\r\n", status_val);
+    Log(log_buf);
+
+    /* coarse_integration_time — changes every frame when AE is running */
+    uint16_t int_time_1, int_time_2;
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0xC840, &int_time_1);
+    HAL_Delay(100);
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0xC840, &int_time_2);
+
+    snprintf(log_buf, sizeof(log_buf),
+             "CAM inttime: 0x%04X → 0x%04X\r\n",
+             int_time_1, int_time_2);
+
+    Log(log_buf);
+
+    uint16_t dbg_val = 0;
+
+    /* NTSC page registers — what did auto-config set? */
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x9420, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "9420: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x9422, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "9422: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x9424, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "9424: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x9426, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "9426: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    /* TX_SS parallel hardware registers */
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3C00, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "3C00: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3C02, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "3C02: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3C04, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "3C04: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    /* Output enable register */
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x0032, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "0032: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    /* IFP SOC2 page — parallel port control */
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3640, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "3640: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3642, &dbg_val);
+    snprintf(log_buf, sizeof(log_buf), "3642: 0x%04X\r\n", dbg_val);
+    Log(log_buf);
+
+    /* DCMI SR multiple samples */
+    for (int i = 0; i < 3; i++) {
+        HAL_Delay(20);
+        snprintf(log_buf, sizeof(log_buf),
+                 "DCMI SR[%d]: 0x%02lX\r\n", i,
+                 (uint32_t)(DCMI->SR & 0x07));
+        Log(log_buf);
+    }
+
+
+    // TODO: Insert correct parameters for this
+    if (Photo_CaptureRaw(0, board_status.photos_taken, opcode) != HAL_OK) {
+        Log("CAMB: photo capture FAILED\r\n");
+        DeactivateCAMB();
+        return CMD_CAM_DCMI_ERROR;
+    }
+
+	DeactivateCAMB();
+	board_status.photos_taken++; 		// Increment the number of photos taken
+
+	// TODO: Check if camera booted correctly. If not, return CMD_CAM_BOOT_ERROR or something
+
+	return CMD_OK;
 }
 
 // CRC handled by Endurosat OBC
@@ -132,56 +282,6 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
 // MAX chunk: 13FF - TODO: Why doesn't this reach until the end. FIX, there's a bug here
 CMD_ReturnStatus CMD_DumpPictureFrame(uint8_t *opcode)
 {
-	uint8_t buffer_choice = opcode[0];
-	const uint32_t CHUNK_SIZE  = AIRMAC_SIZE - 2U;								// 117 bytes fit in tx_buffer[2..118].
-	const uint32_t total_bytes = (uint32_t)L * H * sizeof(uint16_t);			// 614400 — full frame size
-	const uint16_t chunk_index = ((uint16_t)opcode[1] << 8) | opcode[2];		// ME: opcode[1]=MSB, opcode[2]=LSB
-	const uint32_t byte_offset = (uint32_t)chunk_index * CHUNK_SIZE;
-
-	volatile raw_photo_t *buf = NULL;
-
-	if (buffer_choice == 1 && board_status.raw_buffer_1_occupied) {
-		buf = raw_buffer_1;
-	} else if (buffer_choice == 2 && board_status.raw_buffer_2_occupied) {
-		buf = raw_buffer_2;
-	} else if (buffer_choice == 3 && board_status.raw_buffer_3_occupied) {
-		buf = raw_buffer_3;
-	} else {
-		Log("DumpPicture: invalid buffer or buffer not occupied\r\n");
-		return CMD_BUFFER_UNOCCUPIED;
-	}
-
-	char header[80];
-	sprintf(header, "--- Buffer %u | designator=%u | ts=%lu ---\r\n",
-	        buffer_choice, buf->designator, buf->timestamp);
-	Log(header);
-
-	if (byte_offset >= total_bytes) {
-		Log("DumpPicture: chunk index out of range\r\n");
-		return CMD_BUFFER_OOB;
-	}
-
-	volatile uint8_t *src    = (volatile uint8_t *)buf->data + byte_offset;
-	uint32_t          actual = ((byte_offset + CHUNK_SIZE) <= total_bytes) ? CHUNK_SIZE : (total_bytes - byte_offset);
-
-	// Fill tx_buffer[2..] — tx_buffer[0] and [1] are set by TransmitBufferUART and ExecuteCommand
-	for (uint32_t i = 0; i < actual; i++)
-		tx_buffer[2 + i] = (uint8_t) src[i];
-
-	// Mirror to debug UART in 32-byte lines
-	sprintf(header, "Buf%u chunk%u off=%lu len=%lu\r\n",
-	        buffer_choice, chunk_index, byte_offset, actual);
-	Log(header);
-
-	char line[32 * 3 + 3];
-	for (uint32_t i = 0; i < actual; i += 32) {
-		uint32_t chunk  = ((i + 32U) <= actual) ? 32U : (actual - i);
-		int      offset = 0;
-		for (uint32_t j = 0; j < chunk; j++)
-			offset += sprintf(line + offset, "%02X ", (unsigned int) tx_buffer[2 + i + j]);
-		sprintf(line + offset, "\r\n");
-		Log(line);
-	}
 
 	return CMD_OK;
 }

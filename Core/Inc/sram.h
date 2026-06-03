@@ -6,25 +6,43 @@
 
 #include <stdint.h>
 
-#define RAW_PHOTO_BASE_ADDRESS 		  	 		(0x68000000U)									// NOR SRAM BANK 1 - Start of raw buffers
-#define RAW_PHOTO_SIZE 		  	 				sizeof(raw_photo_t)								// Full struct size: header + pixel data of raw photo
+/* --- Raw frame pool ------------------------------------------------ */
+#define RAW_PHOTO_BASE_ADDRESS          		(0x68000000U)				// NOR SRAM BANK 3 - Start of raw buffers
+#define RAW_PHOTO_SIZE                  		sizeof(raw_photo_t)			// Full struct size: header + pixel data of raw photo
+#define RAW_PHOTO_COUNT                 		(3U)
+#define RAW_POOL_SIZE                   		(RAW_PHOTO_COUNT * RAW_PHOTO_SIZE)
 
-#define MAX_COMPRESSED_PHOTOS			 		(100U)											// Maximum number of compressions possible
-#define COMPRESSED_METADATA_BASE_ADDRESS 		(RAW_PHOTO_BASE_ADDRESS + 3*RAW_PHOTO_SIZE)		// Start of compressed metadata
+/* Direct access macros — no pointer variable needed               */
+#define RAW_BUFFER(n)   						((volatile raw_photo_t *)(RAW_PHOTO_BASE_ADDRESS + (n) * RAW_PHOTO_SIZE))
+#define RAW_BUFFER_1    						RAW_BUFFER(0)
+#define RAW_BUFFER_2    						RAW_BUFFER(1)
+#define RAW_BUFFER_3    						RAW_BUFFER(2)
 
-// Start of compressed photo space
-#define COMPRESSED_DATA_BASE_ADDRESS 			((COMPRESSED_METADATA_BASE_ADDRESS) + (MAX_COMPRESSED_PHOTOS * sizeof(compressed_metadata_t)))
+/* --- Compressed metadata pool -------------------------------------- */
+#define MAX_COMPRESSED_PHOTOS           		(100U)						// Maximum number of compressions possible
+#define COMPRESSED_METADATA_BASE_ADDRESS  		(RAW_PHOTO_BASE_ADDRESS + RAW_POOL_SIZE)		// Start of compressed metadata
+#define COMPRESSED_METADATA_POOL_SIZE 			(MAX_COMPRESSED_PHOTOS * sizeof(compressed_metadata_t))
 
-// TODO: check EOM calculation
-#define END_OF_MEMORY							(0x60FA0000U)
+/* Direct access macro */
+#define COMPRESSED_METADATA(n)  				((compressed_metadata_t *)(COMPRESSED_METADATA_BASE_ADDRESS + (n) * sizeof(compressed_metadata_t)))
 
-extern volatile raw_photo_t* raw_buffer_1;					// Raw photo buffer number 1
-extern volatile raw_photo_t* raw_buffer_2;					// Raw photo buffer number 2
-extern volatile raw_photo_t* raw_buffer_3;					// Raw photo buffer number 3
-extern compressed_metadata_t* compressed_metadata;			// Compressed metadata pointer
-extern uint16_t compressed_count;							// Number of compressions in memory
+/* --- Compressed data pool ------------------------------------------ */
+#define COMPRESSED_DATA_BASE_ADDRESS			(COMPRESSED_METADATA_BASE_ADDRESS + COMPRESSED_METADATA_POOL_SIZE)
 
-extern uint16_t *compressed_photos;							// Pointer to first EMPTY compressed space, will move on compression
+/* End of SRAM */
+#define SRAM_END_ADDRESS                		(0x68400000U)
+
+/* Remaining SRAM after raw pool and metadata pool */
+#define COMPRESSED_POOL_SIZE					(SRAM_END_ADDRESS - COMPRESSED_DATA_BASE_ADDRESS)
+
+
+/* ------------------------------------------------------------------ */
+/*  Extern state variables (defined in photo.c)                       */
+/* ------------------------------------------------------------------ */
+extern uint16_t compressed_count;       // number of compressed images stored
+extern uint8_t  *compressed_next;       // pointer to next free byte in
+                                        // compressed data pool
+                                        // advances after each compression
 
 
 /********************************************************************************

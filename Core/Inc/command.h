@@ -17,6 +17,8 @@
 #define COMMAND_INCORRECT_PARAMETER_FAILURE			(75U)		// Too many or too few parameters in instruction requested
 #define COMMAND_BUFFER_UNOCCUPIED					(76U)		// No photo saved in buffer
 #define COMMAND_BUFFER_OUT_OF_BOUNDS				(77U)		// Out of bounds access requested in buffer
+#define COMMAND_CAM_BOOT_ERROR						(78U)		// Camera not responsive on boot
+#define COMMAND_CAM_DCMI_ERROR						(79U)
 
 #define MIN_INTERVAL 						 		(1U) 		// Minutes in interval for STATE_DELAYED_PICTURE (max. waiting is 256*MIN_INTERVAL minutes)
 
@@ -47,7 +49,9 @@ typedef enum {
 	CMD_INCORRECT_PARS = COMMAND_INCORRECT_PARAMETER_FAILURE,	// Wrong number of parameters for desired command
 	CMD_SCHEDULED = COMMAND_SCHEDULED,							// Command accepted, execution deferred
 	CMD_BUFFER_UNOCCUPIED = COMMAND_BUFFER_UNOCCUPIED, 			// Buffer requested unoccupied
-	CMD_BUFFER_OOB = COMMAND_BUFFER_OUT_OF_BOUNDS				// Out of bounds buffer access
+	CMD_BUFFER_OOB = COMMAND_BUFFER_OUT_OF_BOUNDS,				// Out of bounds buffer access
+	CMD_CAM_BOOT_ERROR = COMMAND_CAM_BOOT_ERROR,				// Camera not responsive on boot
+	CMD_CAM_DCMI_ERROR = COMMAND_CAM_DCMI_ERROR					// Photo could not be captured through DCMI
 	// ... add more here
 } CMD_ReturnStatus;
 

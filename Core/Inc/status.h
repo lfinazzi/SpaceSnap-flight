@@ -10,6 +10,8 @@ typedef struct {
     uint32_t total_uptime; 				 // Total cumulative uptime
     uint32_t boot_count;                 // incremented on every reset, stored in FRAM
 
+    // TODO: SRAM and FRAM boot status
+
     // Last command
     uint8_t  last_instruction;           // last instruction number received
     uint8_t  last_cmd_status;            // CMD_OK, CMD_ERROR, etc.
@@ -27,6 +29,8 @@ typedef struct {
     uint8_t  raw_buffer_1_occupied;      // is raw buffer 1 in use?
     uint8_t  raw_buffer_2_occupied;      // is raw buffer 2 in use?
     uint8_t  raw_buffer_3_occupied;      // is raw buffer 3 in use?
+
+    // TODO: Flag for Enables: ENA_I2C, ENA_IMGA, ENAIMGB, ENAIMG
 
     // TODO: error tracking
 
