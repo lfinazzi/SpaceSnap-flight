@@ -86,4 +86,5 @@ void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi);
 extern volatile uint8_t dcmi_frame_ready;   // 1 = frame complete in SRAM
 extern volatile uint8_t dcmi_error;         // 1 = FIFO overrun or sync error
 
+
 #endif

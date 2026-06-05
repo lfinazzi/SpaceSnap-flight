@@ -9,6 +9,8 @@
 uint16_t compressed_count;       // number of compressed images stored
 uint8_t  *compressed_next;       // pointer to next free byte in
 
+extern IWDG_HandleTypeDef hiwdg;
+
 void AssignSRAMMemory(void)
 {
 	char     log_buf[64];
@@ -70,4 +72,38 @@ void AssignSRAMMemory(void)
 	Log(log_buf);
 
 	return;
+}
+
+void DumpRawBuffer(uint8_t slot, uint32_t num_bytes)
+{
+    char log_buf[128];
+    volatile raw_photo_t *buf = RAW_BUFFER(slot);
+    uint8_t *data = (uint8_t *)&buf->data[0];
+
+    sprintf(log_buf, "--- RAW BUFFER %d DUMP (%lu bytes) ---\r\n", slot, num_bytes);
+    Log(log_buf);
+
+    for (uint32_t i = 0; i < num_bytes; i += 32)
+    {
+        // Build entire line in one buffer
+        char line[128] = {0};
+        char tmp[8];
+
+        // Address
+        sprintf(line, "0x%08lX | ", (uint32_t)(data + i));
+
+        // 32 bytes
+        for (uint32_t j = 0; j < 32 && (i + j) < num_bytes; j++)
+        {
+            sprintf(tmp, "%02X ", data[i + j]);
+            strcat(line, tmp);
+        }
+
+        strcat(line, "|\r\n");
+        Log(line);
+
+        HAL_IWDG_Refresh(&hiwdg);
+    }
+
+    Log("--- END DUMP ---\r\n");
 }

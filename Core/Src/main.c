@@ -141,48 +141,6 @@ int main(void)
 
   LogBoardStatus();																	// Logs current status to UART4 (debug)
 
-  /* Read GPIOA MODER to verify PA6 is in AF mode */
-  /* MODER bits [13:12] control PA6               */
-  /* 00=input, 01=output, 10=AF, 11=analog        */
-  uint32_t gpioa_moder = GPIOA->MODER;
-  uint32_t pa6_mode = (gpioa_moder >> 12) & 0x03;
-  char moder_buf[48];
-  snprintf(moder_buf, sizeof(moder_buf),
-           "PA6 mode = %lu (expected 2=AF)\r\n", pa6_mode);
-  Log(moder_buf);
-
-  /* Also check PA4 (HSYNC) bits [9:8] */
-  uint32_t pa4_mode = (gpioa_moder >> 8) & 0x03;
-  snprintf(moder_buf, sizeof(moder_buf),
-           "PA4 mode = %lu (expected 2=AF)\r\n", pa4_mode);
-  Log(moder_buf);
-
-  /* Check PB7 (VSYNC) in GPIOB MODER bits [15:14] */
-  uint32_t gpiob_moder = GPIOB->MODER;
-  uint32_t pb7_mode = (gpiob_moder >> 14) & 0x03;
-  snprintf(moder_buf, sizeof(moder_buf),
-           "PB7 mode = %lu (expected 2=AF)\r\n", pb7_mode);
-  Log(moder_buf);
-
-  /* Check AFRL/AFRH registers to confirm AF13 is selected */
-
-  /* PA4 is in AFRL [19:16] */
-  uint32_t pa4_af = (GPIOA->AFR[0] >> 16) & 0x0F;
-  snprintf(moder_buf, sizeof(moder_buf),
-           "PA4 AF = %lu (expected 13)\r\n", pa4_af);
-  Log(moder_buf);
-
-  /* PA6 is in AFRL [27:24] */
-  uint32_t pa6_af = (GPIOA->AFR[0] >> 24) & 0x0F;
-  snprintf(moder_buf, sizeof(moder_buf),
-           "PA6 AF = %lu (expected 13)\r\n", pa6_af);
-  Log(moder_buf);
-
-  /* PB7 is in AFRL [31:28] */
-  uint32_t pb7_af = (GPIOB->AFR[0] >> 28) & 0x0F;
-  snprintf(moder_buf, sizeof(moder_buf),
-           "PB7 AF = %lu (expected 13)\r\n", pb7_af);
-  Log(moder_buf);
 
   /* USER CODE END 2 */
 
@@ -298,9 +256,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 216;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV4;
+  RCC_OscInitStruct.PLL.PLLM = 13;
+  RCC_OscInitStruct.PLL.PLLN = 195;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -314,7 +272,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV8;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
   {
@@ -350,6 +308,11 @@ static void MX_DCMI_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN DCMI_Init 2 */
+
+  // Read back immediately
+  char log_buf[64];
+  sprintf(log_buf, "DCMI CR after init: 0x%08lX\r\n", DCMI->CR);
+  Log(log_buf);
 
   /* USER CODE END DCMI_Init 2 */
 
@@ -475,7 +438,7 @@ static void MX_TIM11_Init(void)
   htim11.Instance = TIM11;
   htim11.Init.Prescaler = 0;
   htim11.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim11.Init.Period = 3;
+  htim11.Init.Period = 1;
   htim11.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim11.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim11) != HAL_OK)
@@ -487,7 +450,7 @@ static void MX_TIM11_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 2;
+  sConfigOC.Pulse = 1;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim11, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)

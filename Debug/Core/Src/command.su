@@ -1,7 +1,7 @@
 ../Core/Src/command.c:36:6:ReturnCode	152	static
 ../Core/Src/command.c:67:18:GetCommand	24	static
 ../Core/Src/command.c:79:18:ExecuteCommand	24	static
-../Core/Src/command.c:99:18:CMD_TakePicture	112	static
-../Core/Src/command.c:258:18:CMD_TakePictureDelayed	80	static
-../Core/Src/command.c:273:18:CMD_GetStatus	16	static
-../Core/Src/command.c:283:18:CMD_DumpPictureFrame	16	static
+../Core/Src/command.c:99:18:CMD_TakePicture	88	static
+../Core/Src/command.c:141:18:CMD_TakePictureDelayed	80	static
+../Core/Src/command.c:156:18:CMD_GetStatus	16	static
+../Core/Src/command.c:166:18:CMD_DumpPictureFrame	16	static

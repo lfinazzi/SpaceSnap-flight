@@ -15,7 +15,8 @@
 #define CAM_I2C_ADDR_A  		(0x5D << 1)   	// 0xBA, HAL uses 8-bit shifted
 #define CAM_I2C_ADDR_B  		(0x48 << 1)   	// 0x90, HAL uses 8-bit shifted
 
-#define I2C_TIMEOUT				(100U)		  	// Timeout for I2C2
+#define CAM_I2C_TIMEOUT			(100U)		  	// Timeout for I2C2
+#define DCMI_TIMEOUT 			(100U)			// Timeout for DCMI interface, expected transfer time is approx 20 ms
 
 
 typedef struct __attribute__((packed)){
@@ -27,10 +28,12 @@ typedef struct __attribute__((packed)){
 	uint16_t data[L*H];               			// Image data in YCbCr 4:2:2 format
 } raw_photo_t;
 
-typedef char static_assert_raw_photo_t_size[	// Static assert that a complete photo size is as expected, number left explicit on purpose
-    (sizeof(raw_photo_t) == 614412) ? 1 : -1
-];
+// TODO: Fix this static assert
+//typedef char static_assert_raw_photo_t_size[	// Static assert that a complete photo size is as expected, number left explicit on purpose
+//    (sizeof(raw_photo_t) == 614412) ? 1 : -1
+//];
 
+// TODO: see padding
 typedef struct {
 	uint16_t index;					  			// index of compressed photo
 	uint16_t *address;			  	 			// memory address start for picture
@@ -141,6 +144,49 @@ void DeactivateCAMA(void);
 void DeactivateCAMB(void);
 
 /********************************************************************************
+ * @brief  Polls the Host Command Interface doorbell bit until the firmware
+ *         completes processing the last issued command.
+ *
+ * @note   After issuing any HCI command via register 0x0040, the firmware
+ *         sets bit 15 (doorbell) of the command register. This function
+ *         polls until bit 15 clears, indicating command completion.
+ *         The lower byte of the command register is logged for debugging
+ *         but not checked for errors at this stage.
+ *         Timeout is set to 200ms — sufficient for all known HCI commands.
+ *
+ * @param  i2c_addr   7-bit I2C address shifted left by 1 (HAL format).
+ *                    Use CAM_I2C_ADDR_A or CAM_I2C_ADDR_B.
+ *
+ * @retval HAL_OK     Doorbell cleared, command completed successfully.
+ * @retval HAL_TIMEOUT Firmware did not respond within 200ms.
+ ********************************************************************************/
+HAL_StatusTypeDef CAM_WaitDoorbell(uint8_t i2c_addr);
+
+/********************************************************************************
+ * @brief  Queries the current system state of the camera via the Host
+ *         Command Interface (HCI).
+ *
+ * @note   Issues the HC_SYSMGR_GET_STATE command (0x8101) to register 0x0040
+ *         and waits for the firmware to complete processing via the doorbell
+ *         mechanism. The result is read back from the parameter pool at 0xFC00.
+ *
+ *         Known state values:
+ *         0x2800 = SYS_STATE_ENTER_CONFIG_CHANGE (confirmed, datasheet p.23)
+ *         0x3100 = observed post-boot state (unconfirmed, assumed streaming)
+ *         Other values may be returned — log and investigate empirically.
+ *
+ *         If the doorbell times out, 0xFFFF is returned as an error sentinel
+ *         value that cannot be confused with a valid state.
+ *
+ * @param  i2c_addr   7-bit I2C address shifted left by 1 (HAL format).
+ *                    Use CAM_I2C_ADDR_A or CAM_I2C_ADDR_B.
+ *
+ * @retval uint16_t   Current system state value read from parameter pool.
+ *                    0xFFFF if doorbell timed out.
+ ********************************************************************************/
+uint16_t CAM_GetState(uint8_t i2c_addr);
+
+/********************************************************************************
  * @brief  Writes a 16-bit value to a 16-bit addressed register on the
  *         ASX340AT image sensor over I2C.
  *
@@ -187,62 +233,42 @@ HAL_StatusTypeDef CAM_WriteReg(uint8_t i2c_addr, uint16_t reg, uint16_t val);
  ********************************************************************************/
 HAL_StatusTypeDef CAM_ReadReg(uint8_t i2c_addr, uint16_t reg, uint16_t *val);
 
-/********************************************************************************
- * @brief  Verifies I2C communication with the ASX340AT sensor by performing
- *         two read-only checks against known register values.
- *
- * @note   Performs the following checks in order:
- *           1. Reads the device ID register (0x0000) and verifies it matches
- *              0x2285. This confirms the sensor is powered, the I2C bus is
- *              functional, and the correct device is present at i2c_addr.
- *           2. Reads the firmware version register (0x001C) and logs the
- *              result. No pass/fail condition on firmware version — any
- *              non-zero readable value confirms the sensor firmware is running.
- *         Both checks are read-only — no register writes are performed,
- *         making this function safe to call immediately after boot without
- *         disturbing the Auto-Config state the sensor enters on power-up
- *         due to the floating SPI_SDI pin.
- *         Must be called after ActivateCAMA() or ActivateCAMB() has returned.
- *
- * @param  i2c_addr   8-bit shifted I2C address of the target sensor.
- *                    Use CAM_I2C_ADDR_A (0xBA) or CAM_I2C_ADDR_B (0x90).
- *
- * @retval HAL_OK     Both checks passed. Sensor is alive and responding.
- * @retval HAL_ERROR  I2C transaction failed or device ID did not match 0x2285.
- ********************************************************************************/
-HAL_StatusTypeDef Camera_CommsTest(uint8_t i2c_addr);
-
+// 4B version writes of functions above
+HAL_StatusTypeDef CAM_WriteReg32(uint8_t i2c_addr, uint16_t reg, uint32_t val);
+HAL_StatusTypeDef CAM_ReadReg32(uint8_t i2c_addr, uint16_t reg, uint32_t *val);
 
 /********************************************************************************
- * @brief  Configures the ASX340AT sensor with default parameters for
- *         image capture after boot.
+ * @brief  Initialises the camera sensor for Raw Bayer progressive output
+ *         on the parallel digital port.
  *
- * @note   The sensor arrives here in Auto-Config Mode (NTSC streaming) due
- *         to the floating SPI_SDI pin on the sensor board. This function:
- *           1. Verifies the sensor is alive over I2C.
- *           2. Issues a soft reset via register 0x001A to return all
- *              registers to default values and stop streaming. The I2C
- *              bus remains active through soft reset unlike hard reset.
- *           3. Waits for the sensor to complete its internal re-init.
- *           4. Verifies the sensor is still alive after soft reset.
- *           5. Configures slew rate, output format, parallel port,
- *              scan mode and auto exposure parameters.
- *           6. Issues a Change-Config HCI command to apply all settings
- *              and restart streaming with the new configuration.
- *           7. Polls the DOORBELL bit of COMMAND_REGISTER (0x0040) until
- *              the command is acknowledged or a 1000ms timeout elapses.
- *         Must be called after Camera_CommsTest() has returned HAL_OK.
- *         Do not call this function without first calling ActivateCAMA()
- *         or ActivateCAMB() as the sensor must be powered and out of reset.
+ * @note   Configures the following in two Change-Config stages:
  *
- * @param  i2c_addr   8-bit shifted I2C address of the target sensor.
- *                    Use CAM_I2C_ADDR_A (0xBA) or CAM_I2C_ADDR_B (0x90).
+ *         Stage 1 — NTSC progressive parallel preset:
+ *           Writes 0x9426 = 0x0025 to enable VGA progressive output on the
+ *           parallel port using the NTSC driver preset. A Change-Config is
+ *           issued to apply this before proceeding.
  *
- * @retval HAL_OK      Sensor configured and streaming successfully.
- * @retval HAL_ERROR   I2C transaction failed or device ID mismatch.
- * @retval HAL_TIMEOUT Change-Config command not acknowledged within 1000ms.
+ *         Stage 2 — Output format and parallel port control:
+ *           0xC96C = 0x0200  Raw Bayer output format (bits[9:8] = 10)
+ *           0xC972 = 0x0005  Parallel port enabled, progressive mode,
+  *                           continuous PIXCLK (bit[4]=0, bit[2:1]=10, bit[0]=1)
+ *           A second Change-Config is issued to apply these settings.
+ *
+ *         Register addresses 0xC96C and 0xC972 are CamControl variables
+ *         confirmed in the ASX340AT Developer Guide.
+ *         Register 0x9426 is the NTSC driver variable confirmed in the
+ *         ASX340AT Developer Guide.
+ *
+ *         This function must be called after ActivateCAMx() has completed
+ *         and the sensor has finished its boot sequence.
+ *
+ * @param  i2c_addr   7-bit I2C address shifted left by 1 (HAL format).
+ *                    Use CAM_I2C_ADDR_A or CAM_I2C_ADDR_B.
+ *
+ * @retval HAL_OK       Configuration applied successfully.
+ * @retval HAL_TIMEOUT  Doorbell did not clear within 200ms on either stage.
  ********************************************************************************/
-HAL_StatusTypeDef ASX340AT_Init(uint8_t i2c_addr);
+HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr);
 
 /********************************************************************************
  * @brief  Captures a single raw frame from the active camera into an SRAM

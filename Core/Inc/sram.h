@@ -56,5 +56,8 @@ extern uint8_t  *compressed_next;       // pointer to next free byte in
  *********************************************************************************/
 void AssignSRAMMemory(void);
 
+// TODO: Comment
+void DumpRawBuffer(uint8_t slot, uint32_t num_bytes);
+
 
 #endif

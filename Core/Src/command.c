@@ -98,156 +98,39 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
 
 CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 {
+	char log_buf[64];
 	// TODO: Opcode parsing
 
 	// TODO: For now, turns CAMB (using it for debug)
 	ActivateCAMB();
 
-	char log_buf[64];
+	HAL_StatusTypeDef ret = CAM_Init(CAM_I2C_ADDR_B);
+	if(ret != HAL_OK)
+	{
+	    sprintf(log_buf, "Camera B init FAILED, ret=%d\r\n", ret);
+	    Log(log_buf);
+	    Error_Handler();
+	}
+	Log("Camera B init OK\r\n");
+
+	// Scope probe window — kick IWDG while waiting
+	/*for(uint8_t i = 0; i < 60; i++)
+	{
+	    HAL_IWDG_Refresh(&hiwdg);
+	    HAL_Delay(1000);
+	}*/
 
 
-    /* Functionality test — verify sensor responded correctly on boot */
-    if (Camera_CommsTest(CAM_I2C_ADDR_B) != HAL_OK) {
-        Log("CAMB: boot test FAILED\r\n");
-        DeactivateCAMB();
-        return CMD_CAM_BOOT_ERROR;
-    }
-
-    if (ASX340AT_Init(CAM_I2C_ADDR_B) != HAL_OK) {
-        Log("CAMB: init FAILED\r\n");
-        DeactivateCAMB();
-        return CMD_CAM_BOOT_ERROR;
-    }
-    Log("CAMB: boot test OK\r\n");				// only tries to read some camera registers to check successful boot
-
-
-    uint16_t r0030, r0032;
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x0030, &r0030);
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x0032, &r0032);
-    snprintf(log_buf, sizeof(log_buf),
-             "0030=0x%04X 0032=0x%04X\r\n", r0030, r0032);
-    Log(log_buf);
-
-    /* Read cam_port_parallel_control to confirm parallel port enabled */
-    uint16_t reg_val = 0;
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0xC972, &reg_val);
-
-    snprintf(log_buf, sizeof(log_buf), "CAM: C972 = 0x%04X\r\n", reg_val);
-    Log(log_buf);
-    // Expected: 0x0003 (port enabled, interlaced)
-
-    /* Read DCMI CR register to confirm DCMI is enabled */
-    snprintf(log_buf, sizeof(log_buf),
-             "DCMI CR = 0x%08lX\r\n", (uint32_t)DCMI->CR);
-    Log(log_buf);
-    // Bit 14 (ENABLE) should be 1 after HAL_DCMI_Start_DMA
-
-    /* Read sensor streaming status */
-    uint16_t status_val = 0;
-
-    /* Read DCMI_SR — DCMI status register, shows live pin states */
-    snprintf(log_buf, sizeof(log_buf),
-             "DCMI SR = 0x%08lX\r\n", (uint32_t)DCMI->SR);
-    Log(log_buf);
-    /* Bit 0 HSYNC: current state of HSYNC pin
-       Bit 1 VSYNC: current state of VSYNC pin
-       Bit 2 FNE:   FIFO not empty */
-
-    /* Read sensor monitor variables */
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x8000, &status_val);  // mon_major_version
-    snprintf(log_buf, sizeof(log_buf),
-             "CAM MON: 0x%04X\r\n", status_val);
-    Log(log_buf);
-
-    /* Read ae_track_zone — tells us if AE is running */
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0xA81B, &status_val);
-    snprintf(log_buf, sizeof(log_buf),
-             "CAM AE zone: 0x%04X\r\n", status_val);
-    Log(log_buf);
-
-    /* Read cam_frame_scan_control to confirm scan mode */
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0xC858, &status_val);
-    snprintf(log_buf, sizeof(log_buf),
-             "CAM C858: 0x%04X\r\n", status_val);
-    Log(log_buf);
-
-    /* coarse_integration_time — changes every frame when AE is running */
-    uint16_t int_time_1, int_time_2;
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0xC840, &int_time_1);
-    HAL_Delay(100);
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0xC840, &int_time_2);
-
-    snprintf(log_buf, sizeof(log_buf),
-             "CAM inttime: 0x%04X → 0x%04X\r\n",
-             int_time_1, int_time_2);
-
-    Log(log_buf);
-
-    uint16_t dbg_val = 0;
-
-    /* NTSC page registers — what did auto-config set? */
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x9420, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "9420: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x9422, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "9422: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x9424, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "9424: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x9426, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "9426: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    /* TX_SS parallel hardware registers */
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3C00, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "3C00: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3C02, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "3C02: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3C04, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "3C04: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    /* Output enable register */
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x0032, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "0032: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    /* IFP SOC2 page — parallel port control */
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3640, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "3640: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    CAM_ReadReg(CAM_I2C_ADDR_B, 0x3642, &dbg_val);
-    snprintf(log_buf, sizeof(log_buf), "3642: 0x%04X\r\n", dbg_val);
-    Log(log_buf);
-
-    /* DCMI SR multiple samples */
-    for (int i = 0; i < 3; i++) {
-        HAL_Delay(20);
-        snprintf(log_buf, sizeof(log_buf),
-                 "DCMI SR[%d]: 0x%02lX\r\n", i,
-                 (uint32_t)(DCMI->SR & 0x07));
-        Log(log_buf);
-    }
-
-
-    // TODO: Insert correct parameters for this
+	// TODO: Debug pending
     if (Photo_CaptureRaw(0, board_status.photos_taken, opcode) != HAL_OK) {
         Log("CAMB: photo capture FAILED\r\n");
         DeactivateCAMB();
         return CMD_CAM_DCMI_ERROR;
     }
 
+	HAL_Delay(10);
 	DeactivateCAMB();
-	board_status.photos_taken++; 		// Increment the number of photos taken
+	//board_status.photos_taken++; 		// Increment the number of photos taken
 
 	// TODO: Check if camera booted correctly. If not, return CMD_CAM_BOOT_ERROR or something
 
@@ -276,12 +159,12 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
     _Static_assert(sizeof(board_status_t) <= AIRMAC_SIZE - 1, "board_status_t too large for tx_buffer");	// static assert for status_t size
 
     memcpy(&tx_buffer[1], &board_status, sizeof(board_status_t));		// outputs the board status to the tx_buffer
+
     return CMD_OK;
 }
 
-// MAX chunk: 13FF - TODO: Why doesn't this reach until the end. FIX, there's a bug here
 CMD_ReturnStatus CMD_DumpPictureFrame(uint8_t *opcode)
 {
-
+	DumpRawBuffer(0, L * H * sizeof(uint16_t));		// Takes a long time!
 	return CMD_OK;
 }
