@@ -331,40 +331,39 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
     Log(log_buf);
 
     // Stage 3 — parallel port config + Change-Config
-    CAM_WriteReg32(i2c_addr, 0xC96C, 0x00000000);	// YCbCr,      -----> this is processed 8+2 Bayer	// 0x00000E00);
+    CAM_WriteReg32(i2c_addr, 0xC96C, 0x00000000);	// YCbCr
     CAM_WriteReg(i2c_addr, 0xC972, 0x0005);         // Progressive, continuous PIXCLK, port enabled
-    CAM_WriteReg(i2c_addr, 0x001E, 0x0600);		    // Stage 4 — PIXCLK slew rate
+    CAM_WriteReg(i2c_addr, 0x001E, 0x0600);		    // PIXCLK slew rate
     CAM_WriteReg(i2c_addr, 0xFC00, 0x2800);
     CAM_WriteReg(i2c_addr, 0x0040, 0x8100);
     ret = CAM_WaitDoorbell(i2c_addr);
     if(ret != HAL_OK) return ret;
 
-
     // Final readbacks
-    CAM_ReadReg(i2c_addr, 0xC858, &readback);
-    sprintf(log_buf, "0xC858 final: 0x%04X (expected 0x0003)\r\n", readback);
-    Log(log_buf);
+	CAM_ReadReg(i2c_addr, 0xC858, &readback);
+	sprintf(log_buf, "0xC858 final: 0x%04X (expected 0x0003)\r\n", readback);
+	Log(log_buf);
 
-    CAM_ReadReg32(i2c_addr, 0xC96C, &readback32);
-    sprintf(log_buf, "0xC96C final: 0x%08lX (expected 0x00000E00)\r\n", readback32);
-    Log(log_buf);
+	CAM_ReadReg32(i2c_addr, 0xC96C, &readback32);
+	sprintf(log_buf, "0xC96C final: 0x%08lX (expected 0x00000000)\r\n", readback32);
+	Log(log_buf);
 
-    CAM_ReadReg(i2c_addr, 0xC972, &readback);
-    sprintf(log_buf, "0xC972 final: 0x%04X (expected 0x0015)\r\n", readback);
-    Log(log_buf);
+	CAM_ReadReg(i2c_addr, 0xC972, &readback);
+	sprintf(log_buf, "0xC972 final: 0x%04X (expected 0x0005)\r\n", readback);
+	Log(log_buf);
 
-    CAM_ReadReg(i2c_addr, 0x9826, &readback);
-    sprintf(log_buf, "0x9826 final: 0x%04X (expected 0x0025)\r\n", readback);
-    Log(log_buf);
+	CAM_ReadReg(i2c_addr, 0x9426, &readback);
+	sprintf(log_buf, "0x9426 final: 0x%04X (expected 0x0025)\r\n", readback);
+	Log(log_buf);
 
-    uint16_t slew = 0;
-    CAM_ReadReg(i2c_addr, 0x001E, &slew);
-    sprintf(log_buf, "R0x001E slew final: 0x%04X (expected 0x0200)\r\n", slew);
-    Log(log_buf);
+	uint16_t slew = 0;
+	CAM_ReadReg(i2c_addr, 0x001E, &slew);
+	sprintf(log_buf, "R0x001E slew final: 0x%04X (expected 0x0600)\r\n", slew);
+	Log(log_buf);
 
-    state = CAM_GetState(i2c_addr);
-    sprintf(log_buf, "State final: 0x%04X\r\n", state);
-    Log(log_buf);
+	state = CAM_GetState(i2c_addr);
+	sprintf(log_buf, "State final: 0x%04X\r\n", state);
+	Log(log_buf);
 
     return HAL_OK;
 }
@@ -388,14 +387,21 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
     /* Arm DCMI */
     dcmi_frame_ready = 0;
     dcmi_error = 0;
+
     // Make sure interrupts are enabled
     __HAL_DCMI_ENABLE_IT(&hdcmi, DCMI_IT_FRAME);
+
+    // Reset DCMI state for repeated captures
+    HAL_DCMI_Stop(&hdcmi);
+    HAL_Delay(1);
+
+    // Reinitialize DCMI handle state
+    hdcmi.State = HAL_DCMI_STATE_READY;
 
     HAL_StatusTypeDef ret = HAL_DCMI_Start_DMA(&hdcmi,
                                                 DCMI_MODE_SNAPSHOT,
                                                 (uint32_t)&buf->data[0],
-                                                H*L / 2);
-
+                                                H * L / 2);
 
 
     sprintf(log_buf, "DCMI Start ret: %d\r\n", ret);
@@ -409,6 +415,9 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
     sprintf(log_buf, "DCMI CR: 0x%08lX\r\n", DCMI->CR);
     Log(log_buf);
 
+	sprintf(log_buf, "DMA NDTR:  0x%08lX\r\n", hdcmi.DMA_Handle->Instance->NDTR);
+	Log(log_buf);
+
     if (ret != HAL_OK) {
         Log("DCMI: start failed\r\n");
         return HAL_ERROR;
@@ -418,7 +427,7 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
     uint32_t t0 = HAL_GetTick();
     while (!dcmi_frame_ready && !dcmi_error) {
         HAL_IWDG_Refresh(&hiwdg);
-        if ((HAL_GetTick() - t0) > 3000)			// TODO: Change to DCMI_TIMEOUT
+        if ((HAL_GetTick() - t0) > DCMI_TIMEOUT)
         {
         	sprintf(log_buf, "DCMI SR:   0x%08lX\r\n", DCMI->SR);
         	Log(log_buf);
@@ -438,13 +447,20 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
         }
     }
 
-    if (dcmi_error) {
-        Log("DCMI: error\r\n");
-        char log_buf[64];
-        sprintf(log_buf, "DCMI error code: 0x%08lX\r\n", HAL_DCMI_GetError(&hdcmi));
+    if(dcmi_frame_ready)
+    {
+        uint32_t ndtr = hdcmi.DMA_Handle->Instance->NDTR;
+        uint32_t transferred = (H * L / 2) - ndtr;
+        sprintf(log_buf, "DMA NDTR after capture: 0x%08lX\r\n", ndtr);
         Log(log_buf);
-        return HAL_ERROR;
+        sprintf(log_buf, "Words transferred: %lu\r\n", transferred);
+        Log(log_buf);
+        sprintf(log_buf, "Bytes transferred: %lu\r\n", transferred * 4);
+        Log(log_buf);
+        sprintf(log_buf, "Pixels transferred: %lu\r\n", transferred * 2);
+        Log(log_buf);
     }
+
 
     Log("DCMI: frame captured\r\n");
     return HAL_OK;

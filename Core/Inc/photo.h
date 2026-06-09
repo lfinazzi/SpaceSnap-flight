@@ -6,8 +6,8 @@
 
 #include <stdint.h>
 
-#define L 						(480U)			// Raw image length
-#define H 						(640U)			// Raw image height
+#define L 						(576U)			// Raw image length
+#define H 						(720U)			// Raw image height
 
 #define CAM_RESET_PORT  		GPIOC
 #define CAM_RESET_PIN    		GPIO_PIN_0

@@ -113,15 +113,16 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	}
 	Log("Camera B init OK\r\n");
 
-	// Scope probe window — kick IWDG while waiting
-	/*for(uint8_t i = 0; i < 60; i++)
+	/*
+	for(int i = 0; i < 5; i++)
 	{
-	    HAL_IWDG_Refresh(&hiwdg);
-	    HAL_Delay(1000);
-	}*/
+	    Photo_CaptureRaw(0, 0, opcode);
+	    HAL_Delay(100);
+	}
+	// Final capture after AWB has settled
+	Photo_CaptureRaw(0, board_status.photos_taken, opcode);*/
 
 
-	// TODO: Debug pending
     if (Photo_CaptureRaw(0, board_status.photos_taken, opcode) != HAL_OK) {
         Log("CAMB: photo capture FAILED\r\n");
         DeactivateCAMB();
@@ -130,7 +131,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 
 	HAL_Delay(10);
 	DeactivateCAMB();
-	//board_status.photos_taken++; 		// Increment the number of photos taken
+	board_status.photos_taken++; 		// Increment the number of photos taken
 
 	// TODO: Check if camera booted correctly. If not, return CMD_CAM_BOOT_ERROR or something
 
