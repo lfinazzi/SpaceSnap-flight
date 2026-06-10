@@ -1,7 +1,10 @@
-../Core/Src/command.c:36:6:ReturnCode	7
-../Core/Src/command.c:67:18:GetCommand	3
-../Core/Src/command.c:79:18:ExecuteCommand	3
-../Core/Src/command.c:99:18:CMD_TakePicture	3
-../Core/Src/command.c:142:18:CMD_TakePictureDelayed	1
-../Core/Src/command.c:157:18:CMD_GetStatus	1
-../Core/Src/command.c:167:18:CMD_DumpPictureFrame	1
+../Core/Src/command.c:40:6:ReturnCode	7
+../Core/Src/command.c:71:18:GetCommand	3
+../Core/Src/command.c:83:18:ExecuteCommand	3
+../Core/Src/command.c:103:18:CMD_TakePicture	3
+../Core/Src/command.c:135:18:CMD_TakePictureDelayed	1
+../Core/Src/command.c:150:18:CMD_GetStatus	1
+../Core/Src/command.c:160:18:CMD_DumpPictureFrame	1
+../Core/Src/command.c:167:18:CMD_ChangeCamParams	2
+../Core/Src/command.c:182:18:CMD_CompressRawPhoto	2
+../Core/Src/command.c:196:18:CMD_EraseFRAM	1

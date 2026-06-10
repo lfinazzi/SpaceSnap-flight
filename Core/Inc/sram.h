@@ -36,15 +36,6 @@
 #define COMPRESSED_POOL_SIZE					(SRAM_END_ADDRESS - COMPRESSED_DATA_BASE_ADDRESS)
 
 
-/* ------------------------------------------------------------------ */
-/*  Extern state variables (defined in photo.c)                       */
-/* ------------------------------------------------------------------ */
-extern uint16_t compressed_count;       // number of compressed images stored
-extern uint8_t  *compressed_next;       // pointer to next free byte in
-                                        // compressed data pool
-                                        // advances after each compression
-
-
 /********************************************************************************
  * @brief  Assigns fixed SRAM addresses to the pointers used for photo storage.
  *  	   Also check SRAM integrity writing and reading three memory values in

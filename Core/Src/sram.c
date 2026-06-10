@@ -6,9 +6,6 @@
 #include <stdio.h>
 
 
-uint16_t compressed_count;       // number of compressed images stored
-uint8_t  *compressed_next;       // pointer to next free byte in
-
 extern IWDG_HandleTypeDef hiwdg;
 
 void AssignSRAMMemory(void)
@@ -61,10 +58,6 @@ void AssignSRAMMemory(void)
 	memset((void *)COMPRESSED_METADATA_BASE_ADDRESS,
 		   0x00,
 		   COMPRESSED_METADATA_POOL_SIZE);
-
-	/* ---- 3. Initialise runtime state ------------------------------ */
-	compressed_count                  = 0;
-	board_status.compressed_data_ptr  = COMPRESSED_DATA_BASE_ADDRESS;
 
 	snprintf(log_buf, sizeof(log_buf),
 			 "SRAM OK — compressed pool: %lu bytes available\r\n",

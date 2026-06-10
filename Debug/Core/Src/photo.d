@@ -36,7 +36,7 @@ Core/Src/photo.o: ../Core/Src/photo.c ../Core/Inc/photo.h \
  ../Core/Inc/comms.h ../Core/Inc/main.h ../Core/Inc/sram.h \
  ../Core/Inc/photo.h ../Core/Inc/main.h ../Core/Inc/fram.h \
  ../Core/Inc/status.h ../Core/Inc/comms.h ../Core/Inc/irq.h \
- ../Core/Inc/gpio.h
+ ../Core/Inc/gpio.h ../Core/Inc/tiny_jpeg.h
 ../Core/Inc/photo.h:
 ../Core/Inc/command.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h:
@@ -82,3 +82,4 @@ Core/Src/photo.o: ../Core/Src/photo.c ../Core/Inc/photo.h \
 ../Core/Inc/comms.h:
 ../Core/Inc/irq.h:
 ../Core/Inc/gpio.h:
+../Core/Inc/tiny_jpeg.h:

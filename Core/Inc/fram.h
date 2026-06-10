@@ -76,6 +76,7 @@ void SaveBoardStatusFRAM(void);
  ********************************************************************************/
 void LoadBoardStatusFRAM(void);
 
-// TODO: Function to erase FRAM, set everything to zero
+// Will flag FRAM to be erased next boot and initialized to zero
+void EraseFRAMOnNextBoot(void);
 
 #endif

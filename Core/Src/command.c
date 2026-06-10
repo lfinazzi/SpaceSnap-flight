@@ -11,13 +11,17 @@
 #include "stm32f2xx_hal.h"
 
 extern IWDG_HandleTypeDef hiwdg;
+extern cam_params_t cam_params;
 
 // Command table — add new entries here, matching the extern declaration in command.h
 const command_t command_table[] = {
     { "CMD_TakePicture",        CMD_TAKE_PICTURE_ID,          CMD_TakePicture,         HAS_OPCODE},
     { "CMD_TakePictureDelayed", CMD_TAKE_PICTURE_DELAYED_ID,  CMD_TakePictureDelayed,  HAS_OPCODE},
+    { "CMD_ChangeCamParams",    CMD_CHANGE_CAM_PARAMS_ID,     CMD_ChangeCamParams,     HAS_OPCODE},
+    { "CMD_CompressRawPhoto",   CMD_COMPRESS_PHOTO_ID,     	  CMD_CompressRawPhoto,    HAS_OPCODE},
     { "CMD_GetStatus",          CMD_GET_STATUS_ID,            CMD_GetStatus,           NO_OPCODE},
-    { "CMD_DumpPictureFrame",   CMD_DUMP_PICTUREFRAME_ID,     CMD_DumpPictureFrame,    HAS_OPCODE}
+    { "CMD_DumpPictureFrame",   CMD_DUMP_PICTUREFRAME_ID,     CMD_DumpPictureFrame,    HAS_OPCODE},
+    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   NO_OPCODE},
     // ... add more here
 };
 
@@ -109,20 +113,11 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	{
 	    sprintf(log_buf, "Camera B init FAILED, ret=%d\r\n", ret);
 	    Log(log_buf);
-	    Error_Handler();
+	    return CMD_CAM_BOOT_ERROR;
 	}
 	Log("Camera B init OK\r\n");
 
-	/*
-	for(int i = 0; i < 5; i++)
-	{
-	    Photo_CaptureRaw(0, 0, opcode);
-	    HAL_Delay(100);
-	}
-	// Final capture after AWB has settled
-	Photo_CaptureRaw(0, board_status.photos_taken, opcode);*/
-
-
+	// TODO: Algorithm to check for black pixels?
     if (Photo_CaptureRaw(0, board_status.photos_taken, opcode) != HAL_OK) {
         Log("CAMB: photo capture FAILED\r\n");
         DeactivateCAMB();
@@ -133,12 +128,10 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	DeactivateCAMB();
 	board_status.photos_taken++; 		// Increment the number of photos taken
 
-	// TODO: Check if camera booted correctly. If not, return CMD_CAM_BOOT_ERROR or something
-
 	return CMD_OK;
 }
 
-// CRC handled by Endurosat OBC
+// TODO: untested as of yet
 CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode) {
 	picture_delay_mins = opcode[4]; 							// delay is Byte 5 of opcode
 	picture_delay_start = HAL_GetTick();
@@ -166,6 +159,51 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
 
 CMD_ReturnStatus CMD_DumpPictureFrame(uint8_t *opcode)
 {
-	DumpRawBuffer(0, L * H * sizeof(uint16_t));		// Takes a long time!
+	DumpRawBuffer(opcode[0], L * H * sizeof(uint16_t));		// Takes a while!
 	return CMD_OK;
 }
+
+// TODO: Untested, for now AE is not used in taking pictures
+CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode)
+{
+	uint8_t idx = opcode[0];		// number of parameter to change
+	uint16_t value = ( opcode[1] << 8 ) | opcode[2];
+	switch(idx) {
+	case 0:
+		cam_params.ae_rule_algo_val = value;		// TODO: handle other cases
+		break;
+	default:
+		break;
+	}
+
+	return CMD_OK;
+}
+
+CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode)
+{
+	uint8_t buffer = opcode[0];
+	uint8_t ret = 0;
+
+	ret = CompressRawPhoto(buffer);
+
+	if (ret == 0)		// Compression failed
+		return CMD_COMPRESS_ERROR;
+
+	return CMD_OK;
+}
+
+
+CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode)
+{
+	EraseFRAMOnNextBoot();
+	return CMD_OK;
+}
+
+
+
+
+
+
+
+
+

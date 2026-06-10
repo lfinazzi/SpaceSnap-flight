@@ -19,6 +19,7 @@
 #define COMMAND_BUFFER_OUT_OF_BOUNDS				(77U)		// Out of bounds access requested in buffer
 #define COMMAND_CAM_BOOT_ERROR						(78U)		// Camera not responsive on boot
 #define COMMAND_CAM_DCMI_ERROR						(79U)
+#define COMMAND_COMPRESS_ERROR						(80U)
 
 #define MIN_INTERVAL 						 		(1U) 		// Minutes in interval for STATE_DELAYED_PICTURE (max. waiting is 256*MIN_INTERVAL minutes)
 
@@ -33,11 +34,14 @@ extern uint8_t ignore_flag;										// Used to only transmit "Waiting for reset
 typedef enum {
 	CMD_TAKE_PICTURE_ID         	= 0x33,
 	CMD_TAKE_PICTURE_DELAYED_ID,   // 0x34
+	CMD_CHANGE_CAM_PARAMS_ID,	   // 0x35
+	CMD_COMPRESS_PHOTO_ID,
 	// ... add more here
 
 	CMD_DUMP_PICTUREFRAME_ID        = 0x60,
 
 	CMD_GET_STATUS_ID               = 0x63,
+	CMD_ERASE_FRAM_ID			    // 0x64
 	// ... add more here
 } cmd_id_t;
 
@@ -51,7 +55,8 @@ typedef enum {
 	CMD_BUFFER_UNOCCUPIED = COMMAND_BUFFER_UNOCCUPIED, 			// Buffer requested unoccupied
 	CMD_BUFFER_OOB = COMMAND_BUFFER_OUT_OF_BOUNDS,				// Out of bounds buffer access
 	CMD_CAM_BOOT_ERROR = COMMAND_CAM_BOOT_ERROR,				// Camera not responsive on boot
-	CMD_CAM_DCMI_ERROR = COMMAND_CAM_DCMI_ERROR					// Photo could not be captured through DCMI
+	CMD_CAM_DCMI_ERROR = COMMAND_CAM_DCMI_ERROR,				// Photo could not be captured through DCMI
+	CMD_COMPRESS_ERROR = COMMAND_COMPRESS_ERROR					// Photo could not be compressed
 	// ... add more here
 } CMD_ReturnStatus;
 
@@ -162,8 +167,18 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode);
 
 
 /********************************************************************************
- * @brief  Copies one chunk of a raw photo buffer into tx_buffer[2..] for
- *         transmission to the OBC.
+ * @brief  Dumps photo to UART4 (debug).
+ *
+ * @note   Selects the source buffer from opcode[0] (1, 2, or 3).
+ *
+ * @param  opcode   opcode[0]: buffer selector (1–3).
+ *
+ * @return CMD_OK on success
+ *********************************************************************************/
+CMD_ReturnStatus CMD_DumpPictureFrame(uint8_t *opcode);
+
+/********************************************************************************
+ * @brief  Changes parameter configs for both CAMs
  *
  * @note   Selects the source buffer from opcode[0] (1, 2, or 3). Calculates
  *         the byte offset as chunk_index × CHUNK_SIZE, where chunk_index is
@@ -172,13 +187,31 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode);
  *         buffer choice is invalid, CMD_BUFFER_OOB if the offset exceeds the
  *         total frame size.
  *
- * @param  opcode   opcode[0]: buffer selector (1–3).
- *                  opcode[1]: MSB of chunk index.
- *                  opcode[2]: LSB of chunk index.
+ * @param  opcode   opcode[0]: parameter selection
+ *                  opcode[1]: MSB of 16b write value
+ *                  opcode[2]: LSB of 16b write value
  *
- * @return CMD_OK on success, CMD_BUFFER_UNOCCUPIED or CMD_BUFFER_OOB on error.
+ * @returns CMD_OK
  *********************************************************************************/
-CMD_ReturnStatus CMD_DumpPictureFrame(uint8_t *opcode);
+CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode);
+
+/********************************************************************************
+ * @brief  Compresses raw photo in a given buffer and saves it in SRAM + FRAM
+ *
+ * @param  opcode   opcode[0]: raw buffer selected, 0, 1, or 2
+ *                  opcode[1]: Quality of compression, TODO: Check this
+ *
+ * @returns CMD_OK or CMD_COMPRESS_ERROR
+ *********************************************************************************/
+CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Flags FRAM to be erased on next boot
+ *
+ * @returns CMD_OK
+ *********************************************************************************/
+CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode);
 
 
 // Command Table definition lives in command.c — add new entries there

@@ -1,5 +1,6 @@
-../Core/Src/fram.c:5:6:FRAM_WriteByte	1
-../Core/Src/fram.c:26:9:FRAM_ReadByte	1
-../Core/Src/fram.c:43:6:TestFRAM	5
-../Core/Src/fram.c:69:6:SaveBoardStatusFRAM	2
-../Core/Src/fram.c:80:6:LoadBoardStatusFRAM	3
+../Core/Src/fram.c:8:6:FRAM_WriteByte	1
+../Core/Src/fram.c:29:9:FRAM_ReadByte	1
+../Core/Src/fram.c:46:6:TestFRAM	5
+../Core/Src/fram.c:72:6:SaveBoardStatusFRAM	2
+../Core/Src/fram.c:83:6:LoadBoardStatusFRAM	4
+../Core/Src/fram.c:115:6:EraseFRAMOnNextBoot	1

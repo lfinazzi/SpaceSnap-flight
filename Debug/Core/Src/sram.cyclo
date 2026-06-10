@@ -1,2 +1,2 @@
-../Core/Src/sram.c:14:6:AssignSRAMMemory	6
-../Core/Src/sram.c:77:6:DumpRawBuffer	4
+../Core/Src/sram.c:11:6:AssignSRAMMemory	6
+../Core/Src/sram.c:70:6:DumpRawBuffer	4

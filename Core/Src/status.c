@@ -12,9 +12,15 @@ uint32_t hours = 0;
 uint32_t minutes = 0;
 uint32_t seconds = 0;
 
+extern uint8_t current_metadata_slot;
+extern uint32_t current_data_address_sram;
+
 void UpdateStatus(void)
 {
     board_status.uptime_ms = HAL_GetTick();
+    board_status.compressed_metadata_slot = current_metadata_slot;
+    board_status.compressed_data_sram_ptr = current_data_address_sram;
+
     // TODO: Add other parameters in board status. Note: Only uptime_ms and boot_count need to
     //  be here, as other status variables are handled by photo taking commands
 }

@@ -13,7 +13,7 @@ typedef struct {
     // TODO: SRAM and FRAM boot status
 
     // Last command
-    uint8_t  last_instruction;           // last instruction number received
+    uint8_t  last_instruction;           // last instruction number received			// TODO: Check status save and dump
     uint8_t  last_cmd_status;            // CMD_OK, CMD_ERROR, etc.
     uint8_t  last_opcode[OPCODE_SIZE];   // Last opcode received
 
@@ -25,12 +25,12 @@ typedef struct {
     // TODO: Add: Current memory pointer to save next compression, other?
 
     // Memory status
-    uint32_t compressed_data_ptr;        // current write pointer in compressed space
+    uint8_t compressed_metadata_slot;    // current address of compressed metadata. Advance by one on successful compression
+    uint32_t compressed_data_sram_ptr;   // current write pointer in compressed space
     uint8_t  raw_buffer_1_occupied;      // is raw buffer 1 in use?
     uint8_t  raw_buffer_2_occupied;      // is raw buffer 2 in use?
     uint8_t  raw_buffer_3_occupied;      // is raw buffer 3 in use?
 
-    // TODO: Flag for Enables: ENA_I2C, ENA_IMGA, ENAIMGB, ENAIMG
 
     // TODO: error tracking
 

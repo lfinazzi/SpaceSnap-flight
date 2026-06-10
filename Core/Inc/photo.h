@@ -6,8 +6,8 @@
 
 #include <stdint.h>
 
-#define L 						(576U)			// Raw image length
-#define H 						(720U)			// Raw image height
+#define L 						(640U)			// Raw image length
+#define H 						(480U)			// Raw image height
 
 #define CAM_RESET_PORT  		GPIOC
 #define CAM_RESET_PIN    		GPIO_PIN_0
@@ -16,8 +16,7 @@
 #define CAM_I2C_ADDR_B  		(0x48 << 1)   	// 0x90, HAL uses 8-bit shifted
 
 #define CAM_I2C_TIMEOUT			(100U)		  	// Timeout for I2C2
-#define DCMI_TIMEOUT 			(100U)			// Timeout for DCMI interface, expected transfer time is approx 20 ms
-
+#define DCMI_TIMEOUT 			(500U)			// Timeout for DCMI interface, expected transfer time is approx 20 ms
 
 typedef struct __attribute__((packed)){
 	uint16_t designator;			  			// global raw photo number taken
@@ -28,22 +27,29 @@ typedef struct __attribute__((packed)){
 	uint16_t data[L*H];               			// Image data in YCbCr 4:2:2 format
 } raw_photo_t;
 
-// TODO: Fix this static assert
-//typedef char static_assert_raw_photo_t_size[	// Static assert that a complete photo size is as expected, number left explicit on purpose
-//    (sizeof(raw_photo_t) == 614412) ? 1 : -1
-//];
-
-// TODO: see padding
 typedef struct {
+	uint16_t ae_rule_algo_val; 					// Algorithm for auto exposure
+} cam_params_t;		// TODO: These settings will be the ones that can be changed. Other settings? For now, only exposure considered
+
+// TODO: Fix this static assert
+typedef char static_assert_raw_photo_t_size[	// Static assert that a complete photo size is as expected, number left explicit on purpose
+    (sizeof(raw_photo_t) == 614412) ? 1 : -1
+];
+
+// Aligned for 16b (SRAM). Will it be okay for 8b (FRAM)? TODO: Check
+typedef struct __attribute__((packed)){
 	uint16_t index;					  			// index of compressed photo
 	uint16_t *address;			  	 			// memory address start for picture
-	uint32_t size;				 	  			// size of compressed photo
-	uint32_t timestamp;				  			// internal timestamp
-	uint16_t opcode[OPCODE_SIZE];				// instruction + opcode, saved in 16b to avoid padding
+	uint16_t size_MSB;			      			//compression size is uint32_t
+	uint16_t size_LSB;
+	uint16_t timestamp_MSB;			      		// timestamp is uint32_t
+	uint16_t timestamp_LSB;
+	uint8_t opcode[OPCODE_SIZE]; 				// opcodes sent to take picture
+	uint8_t  _pad;             					// explicit padding byte to keep alignment
 } compressed_metadata_t;
 
-typedef struct {
-    uint16_t *data;  						// compressed photo data
+typedef struct __attribute__((packed)) {
+    uint16_t *data;  							// compressed photo data
 } compressed_photo_t;
 
 
@@ -241,10 +247,6 @@ HAL_StatusTypeDef CAM_WriteReg(uint8_t i2c_addr, uint16_t reg, uint16_t val);
  ********************************************************************************/
 HAL_StatusTypeDef CAM_ReadReg(uint8_t i2c_addr, uint16_t reg, uint16_t *val);
 
-// 4B version writes of functions above
-HAL_StatusTypeDef CAM_WriteReg32(uint8_t i2c_addr, uint16_t reg, uint32_t val);
-HAL_StatusTypeDef CAM_ReadReg32(uint8_t i2c_addr, uint16_t reg, uint32_t *val);
-
 /********************************************************************************
  * @brief  Initialises the camera sensor for Raw Bayer progressive output
  *         on the parallel digital port.
@@ -312,5 +314,21 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr);
  *                     streaming or VSYNC signal absent.
  ********************************************************************************/
 HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot, uint16_t designator, uint8_t  *opcode);
+
+/********************************************************************************
+ * @brief  Function to initialize changable CAM params default values
+ *
+ * TODO: Add other params?
+ ********************************************************************************/
+void InitCamParams(void);
+
+/********************************************************************************
+ * @brief  Function to compress photo in raw buffer and save to SRAM + FRAM
+ *
+ *	returns 0 if compression failed and 1 if it was successful
+ *
+ * TODO: Comment pending
+ ********************************************************************************/
+uint8_t CompressRawPhoto(uint8_t buffer);
 
 #endif
