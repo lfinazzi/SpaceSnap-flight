@@ -298,7 +298,7 @@ HAL_StatusTypeDef CAM_ReadReg32(uint8_t i2c_addr, uint16_t reg, uint32_t *val)
     return ret;
 }
 
-
+/* First version of CAM Init. Works for greyscale, but not for color
 HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
 {
     HAL_StatusTypeDef ret;
@@ -308,8 +308,8 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
     char log_buf[164];
 
     // Stage 1 — PAL progressive preset + Change-Config
-    CAM_WriteReg(i2c_addr, 0x9826, 0x0025);
-    CAM_WriteReg(i2c_addr, 0xFC00, 0x2800);
+    CAM_WriteReg(i2c_addr, 0x9826, 0x0025);			// PAL progressive preset
+    CAM_WriteReg(i2c_addr, 0xFC00, 0x2800);			// Change-config
     CAM_WriteReg(i2c_addr, 0x0040, 0x8100);
     ret = CAM_WaitDoorbell(i2c_addr);
     if(ret != HAL_OK) return ret;
@@ -320,45 +320,75 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
 
     // Stage 2 — PAL progressive scan mode + Change-Config
     // bit[2:1] = 01 PAL, bit[0] = 1 progressive
-    CAM_WriteReg(i2c_addr, 0xC858, 0x0003);
-    CAM_WriteReg(i2c_addr, 0xFC00, 0x2800);
+    CAM_WriteReg(i2c_addr, 0xC858, 0x0003);			// PAL progressive
+    CAM_WriteReg(i2c_addr, 0xFC00, 0x2800);			// Change-config
     CAM_WriteReg(i2c_addr, 0x0040, 0x8100);
     ret = CAM_WaitDoorbell(i2c_addr);
     if(ret != HAL_OK) return ret;
 
     CAM_ReadReg(i2c_addr, 0xC858, &readback);
-    sprintf(log_buf, "0xC858 after CC: 0x%04X (expected 0x0003)\r\n", readback);
+    sprintf(log_buf, "0xC858 after CC: 0x%04X\r\n", readback);
     Log(log_buf);
 
     // Stage 3 — parallel port config + Change-Config
-    CAM_WriteReg32(i2c_addr, 0xC96C, 0x00000000);	// YCbCr
+    CAM_WriteReg32(i2c_addr, 0xC96C, 0x00000000);	// 0x00000000 for YCbCr, 0x00000100 for RGB565,  0x00000E00 for 8+2 bayer
     CAM_WriteReg(i2c_addr, 0xC972, 0x0005);         // Progressive, continuous PIXCLK, port enabled
-    CAM_WriteReg(i2c_addr, 0x001E, 0x0600);		    // PIXCLK slew rate
-    CAM_WriteReg(i2c_addr, 0xFC00, 0x2800);
+    CAM_WriteReg(i2c_addr, 0x001E, 0x0601);		    // PIXCLK and DOUT slew rate
+
+    // Disable AWB
+    CAM_WriteReg(i2c_addr, 0xAC02, 0x0000);
+
+    CAM_WriteReg(i2c_addr, 0xFC00, 0x2800);			// Change-config
     CAM_WriteReg(i2c_addr, 0x0040, 0x8100);
     ret = CAM_WaitDoorbell(i2c_addr);
     if(ret != HAL_OK) return ret;
 
+    // Stage 4 — fix FOV alignment
+    CAM_WriteReg(i2c_addr, 0xC85E, 0x02D0);  		// 720 active pixels
+    CAM_WriteReg(i2c_addr, 0xC860, 0x0000);  		// first pixel = 0
+    CAM_WriteReg(i2c_addr, 0xFC00, 0x2800);	 		// Change-config
+    CAM_WriteReg(i2c_addr, 0x0040, 0x8100);
+    ret = CAM_WaitDoorbell(i2c_addr);
+    if(ret != HAL_OK) return ret;
+
+    // Disable AWB — use manual gains
+    //CAM_WriteReg(i2c_addr, 0xAC02, 0x0000);  // disable AWB
+
     // Final readbacks
+    uint16_t r_gain, b_gain;
+    CAM_ReadReg(i2c_addr, 0xAC12, &r_gain);
+    CAM_ReadReg(i2c_addr, 0xAC14, &b_gain);
+    sprintf(log_buf, "AWB R=0x%04X B=0x%04X\r\n", r_gain, b_gain);
+    Log(log_buf);
+
 	CAM_ReadReg(i2c_addr, 0xC858, &readback);
-	sprintf(log_buf, "0xC858 final: 0x%04X (expected 0x0003)\r\n", readback);
+	sprintf(log_buf, "0xC858 final: 0x%04X\r\n", readback);
 	Log(log_buf);
 
 	CAM_ReadReg32(i2c_addr, 0xC96C, &readback32);
-	sprintf(log_buf, "0xC96C final: 0x%08lX (expected 0x00000000)\r\n", readback32);
+	sprintf(log_buf, "0xC96C final: 0x%08lX\r\n", readback32);
 	Log(log_buf);
 
 	CAM_ReadReg(i2c_addr, 0xC972, &readback);
-	sprintf(log_buf, "0xC972 final: 0x%04X (expected 0x0005)\r\n", readback);
+	sprintf(log_buf, "0xC972 final: 0x%04X\r\n", readback);
 	Log(log_buf);
 
-	CAM_ReadReg(i2c_addr, 0x9426, &readback);
-	sprintf(log_buf, "0x9426 final: 0x%04X (expected 0x0025)\r\n", readback);
+	CAM_ReadReg(i2c_addr, 0x9826, &readback);
+	sprintf(log_buf, "0x9826 final: 0x%04X\r\n", readback);
 	Log(log_buf);
 
 	uint16_t slew = 0;
 	CAM_ReadReg(i2c_addr, 0x001E, &slew);
-	sprintf(log_buf, "R0x001E slew final: 0x%04X (expected 0x0600)\r\n", slew);
+	sprintf(log_buf, "R0x001E slew final: 0x%04X\r\n", slew);
+	Log(log_buf);
+
+	uint16_t fov_active = 0;
+	uint16_t fov_first  = 0;
+	CAM_ReadReg(i2c_addr, 0xC85E, &fov_active);
+	CAM_ReadReg(i2c_addr, 0xC860, &fov_first);
+	sprintf(log_buf, "FOV active pixels: %d\r\n", fov_active);
+	Log(log_buf);
+	sprintf(log_buf, "FOV first pixel: %d\r\n", fov_first);
 	Log(log_buf);
 
 	state = CAM_GetState(i2c_addr);
@@ -366,7 +396,7 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
 	Log(log_buf);
 
     return HAL_OK;
-}
+}*/
 
 HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
                                    uint16_t designator,
@@ -387,6 +417,12 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
     /* Arm DCMI */
     dcmi_frame_ready = 0;
     dcmi_error = 0;
+
+    // Pre-configure DMA first
+    HAL_DMA_Start_IT(hdcmi.DMA_Handle,
+                     (uint32_t)&DCMI->DR,
+                     (uint32_t)&buf->data[0],
+                     H*L / 2);
 
     // Make sure interrupts are enabled
     __HAL_DCMI_ENABLE_IT(&hdcmi, DCMI_IT_FRAME);

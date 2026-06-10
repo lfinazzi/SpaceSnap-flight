@@ -21,12 +21,3 @@ void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
     Log("DCMI frame callback fired\r\n");
 }
 
-/* ------------------------------------------------------------------ */
-/*  Called by HAL on DCMI FIFO overrun or synchronisation error       */
-/* ------------------------------------------------------------------ */
-void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi)
-{
-    dcmi_error = 1;
-    HAL_DCMI_Stop(hdcmi);
-}
-

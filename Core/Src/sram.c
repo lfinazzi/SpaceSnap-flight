@@ -103,6 +103,7 @@ void DumpRawBuffer(uint8_t slot, uint32_t num_bytes)
         Log(line);
 
         HAL_IWDG_Refresh(&hiwdg);
+        HAL_Delay(1);  // delay to prevent UART overflow for high data rates
     }
 
     Log("--- END DUMP ---\r\n");

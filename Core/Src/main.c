@@ -90,6 +90,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+
   ret = HAL_OK;										// Saves return of HAL calls
   state = 0;										// state = IDLE
   picture_delay_start = 0;							// Moment the delayed photo instruction was executed
@@ -480,7 +481,7 @@ static void MX_UART4_Init(void)
 
   /* USER CODE END UART4_Init 1 */
   huart4.Instance = UART4;
-  huart4.Init.BaudRate = 115200;
+  huart4.Init.BaudRate = 1500000;
   huart4.Init.WordLength = UART_WORDLENGTH_8B;
   huart4.Init.StopBits = UART_STOPBITS_1;
   huart4.Init.Parity = UART_PARITY_NONE;

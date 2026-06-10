@@ -10,5 +10,5 @@
 ../Core/Src/photo.c:253:19:CAM_ReadReg	1
 ../Core/Src/photo.c:267:19:CAM_WriteReg32	1
 ../Core/Src/photo.c:284:19:CAM_ReadReg32	1
-../Core/Src/photo.c:302:19:CAM_Init	4
-../Core/Src/photo.c:371:19:Photo_CaptureRaw	7
+../Core/Src/photo.c:302:19:CAM_Init	5
+../Core/Src/photo.c:401:19:Photo_CaptureRaw	7

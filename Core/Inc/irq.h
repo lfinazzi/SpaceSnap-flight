@@ -66,22 +66,6 @@ void DMA2_Stream1_IRQHandler(void);
  ********************************************************************************/
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi);
 
-/********************************************************************************
- * @brief  HAL callback fired on DCMI FIFO overrun or synchronisation error.
- *
- * @note   Overrides the HAL weak definition. Sets dcmi_error = 1 and calls
- *         HAL_DCMI_Stop() to halt the DCMI peripheral cleanly. The error
- *         flag is checked by Photo_CaptureRaw() which will return HAL_ERROR
- *         to the caller. A FIFO overrun typically indicates the DMA cannot
- *         drain the DCMI FIFO fast enough — check FSMC timing and DMA
- *         priority settings if this fires during normal operation.
- *         Called from DCMI_IRQHandler via HAL_DCMI_IRQHandler().
- *         Keep ISR body minimal — no blocking calls, no UART logging.
- *
- * @param  hdcmi   Pointer to the DCMI handle (hdcmi, defined in main.c).
- ********************************************************************************/
-void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi);
-
 /* Flags set by DCMI callbacks, polled by Photo_CaptureRaw()          */
 extern volatile uint8_t dcmi_frame_ready;   // 1 = frame complete in SRAM
 extern volatile uint8_t dcmi_error;         // 1 = FIFO overrun or sync error

@@ -162,6 +162,14 @@ void DeactivateCAMB(void);
  ********************************************************************************/
 HAL_StatusTypeDef CAM_WaitDoorbell(uint8_t i2c_addr);
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Internal helper: issue a Change-Config command and poll until complete.
+ * Change-Config is required after writing frame-start-synchronized variables
+ * (scan mode, orientation, port configuration, AE/AWB parameters).
+ * The SOC applies the new settings on the next frame boundary.
+ * ───────────────────────────────────────────────────────────────────────────── */
+HAL_StatusTypeDef CAM_ChangeConfig(uint8_t i2c_addr);
+
 /********************************************************************************
  * @brief  Queries the current system state of the camera via the Host
  *         Command Interface (HCI).
