@@ -35,13 +35,15 @@ typedef enum {
 	CMD_TAKE_PICTURE_ID         	= 0x33,
 	CMD_TAKE_PICTURE_DELAYED_ID,   // 0x34
 	CMD_CHANGE_CAM_PARAMS_ID,	   // 0x35
-	CMD_COMPRESS_PHOTO_ID,
+	CMD_COMPRESS_PHOTO_ID,		   // 0x36
 	// ... add more here
 
-	CMD_DUMP_PICTUREFRAME_ID        = 0x60,
+	CMD_DUMP_RAW_ID        			= 0x60,
+	CMD_DUMP_COMPRESSED_ID 			= 0x61,
 
 	CMD_GET_STATUS_ID               = 0x63,
-	CMD_ERASE_FRAM_ID			    // 0x64
+
+	CMD_ERASE_FRAM_ID			    = 0x88
 	// ... add more here
 } cmd_id_t;
 
@@ -129,7 +131,13 @@ const command_t* GetCommand(uint8_t instruction_number);
  *         available. Increments board_status.photos_taken and marks
  *         raw_buffer_1_occupied.
  *
- * @param  opcode   Unused. Reserved for future buffer-selection logic.
+ * opcode[0] --> buffer number (4 MSb), CAM number (4 lsb)
+ * opcode[1] --> Use black filtering? 0 if no, 1 if yes
+ * opcode[2] --> photo tries if black filtering enabled. Otherwise unused
+ * opcode[3] --> black threshold for filtering if enabled. Otherwise unised
+ * opcode[4] --> Unused for CMD_TakePicture
+ *
+ * Take a single pic with CAM N (0 for A, 1 for B) and save in BUFFER 0 with opcode: 0N 00 00 00 00
  *
  * @return CMD_OK always.
  *********************************************************************************/
@@ -144,8 +152,8 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode);
  *         tx_buffer[1:2] for the OBC response. State machine transitions to
  *         STATE_DELAYED_PICTURE via the CMD_SCHEDULED return value.
  *
- * @param  opcode   opcode[4] holds the number of MIN_INTERVAL-minute intervals
- *                  to wait before taking the picture.
+ * opcode[0:3] --> Same as CMD_TakePicture
+ * opcode[4] --> picture delay (max delay = 255*MIN_INTERVAL mins. If MIN_INTERVAL = 5, max. delay is 21h
  *
  * @return CMD_SCHEDULED always.
  *********************************************************************************/
@@ -167,15 +175,25 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode);
 
 
 /********************************************************************************
- * @brief  Dumps photo to UART4 (debug).
+ * @brief  Dumpsraw  photo to UART4 (debug).
  *
  * @note   Selects the source buffer from opcode[0] (1, 2, or 3).
  *
- * @param  opcode   opcode[0]: buffer selector (1–3).
+ * @param  opcode   opcode[0]: buffer selector.
  *
  * @return CMD_OK on success
  *********************************************************************************/
-CMD_ReturnStatus CMD_DumpPictureFrame(uint8_t *opcode);
+CMD_ReturnStatus CMD_DumpRaw(uint8_t *opcode);
+
+/********************************************************************************
+ * @brief  Dumps compressed photo to UART4 (debug).
+ *
+ * @note   Dumps compressed SRAM buffer to UART4 (debug)
+ *
+ * @param  opcode   unused
+ * @return CMD_OK on success
+ *********************************************************************************/
+CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode);
 
 /********************************************************************************
  * @brief  Changes parameter configs for both CAMs
@@ -198,8 +216,8 @@ CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode);
 /********************************************************************************
  * @brief  Compresses raw photo in a given buffer and saves it in SRAM + FRAM
  *
- * @param  opcode   opcode[0]: raw buffer selected, 0, 1, or 2
- *                  opcode[1]: Quality of compression, TODO: Check this
+ * @param  opcode   opcode[0]: raw buffer selected
+ *                  opcode[1]: Quality of compression: 1, 2 or 3 (from worse to best)
  *
  * @returns CMD_OK or CMD_COMPRESS_ERROR
  *********************************************************************************/
@@ -208,6 +226,8 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode);
 
 /********************************************************************************
  * @brief  Flags FRAM to be erased on next boot
+ *
+ * @param  opcode  unused
  *
  * @returns CMD_OK
  *********************************************************************************/

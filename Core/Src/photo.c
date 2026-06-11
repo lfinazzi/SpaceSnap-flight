@@ -3,7 +3,7 @@
 #include "main.h"
 
 #define TJE_IMPLEMENTATION
-#include "tiny_jpeg.h"
+#include <tiny_jpeg.h>
 
 extern I2C_HandleTypeDef hi2c2;
 extern TIM_HandleTypeDef htim11;
@@ -76,7 +76,7 @@ void ActivateCAMA(void)
 	{
 	    sprintf(log_buf, "Camera A I2C FAILED, ret=%d\r\n", ret);
 	    Log(log_buf);
-	    Error_Handler();
+	    return;
 	}
 	sprintf(log_buf, "Camera A chip_id: 0x%04X\r\n", chip_id);
 	Log(log_buf);
@@ -85,7 +85,7 @@ void ActivateCAMA(void)
 	if(state == 0xFFFF)
 	{
 	    Log("Camera A GetState FAILED\r\n");
-	    Error_Handler();
+	    return;
 	}
 	sprintf(log_buf, "Camera A state before config: 0x%04X\r\n", state);
 	Log(log_buf);
@@ -139,7 +139,7 @@ void ActivateCAMB(void)
     {
         sprintf(log_buf, "Camera B I2C FAILED, ret=%d\r\n", ret);
         Log(log_buf);
-        Error_Handler();
+        return;
     }
     sprintf(log_buf, "Camera B chip_id: 0x%04X\r\n", chip_id);
     Log(log_buf);
@@ -148,7 +148,7 @@ void ActivateCAMB(void)
     if(state == 0xFFFF)
     {
         Log("Camera B GetState FAILED\r\n");
-        Error_Handler();
+        return;
     }
     sprintf(log_buf, "Camera B state before config: 0x%04X\r\n", state);
     Log(log_buf);
@@ -283,7 +283,6 @@ HAL_StatusTypeDef CAM_ReadReg(uint8_t i2c_addr, uint16_t reg, uint16_t *val)
 }
 
 
-// TODO: Implement different errors on return
 HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
 {
     HAL_StatusTypeDef ret;
@@ -381,7 +380,7 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
      * Adjust to 0x0002 (vertical flip) or 0x0003 (rotate 180°) if your
      * physical lens/PCB mounting requires a different orientation.
      * Needs Change-Config to take effect. */
-    CAM_WriteReg(i2c_addr, 0xC838, 0x0000);			// TODO: Change after final camera position
+    CAM_WriteReg(i2c_addr, 0xC838, 0x0000);			// TODO: Change on definitive board camera position to avoid rotation
 
     /* CAM_AET_FLICKER_FREQ_HZ (CamControl 0xC881)
      * Sets the reference frequency for flicker avoidance.
@@ -407,7 +406,7 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
 
     /* Verify scan mode was accepted */
     CAM_ReadReg(i2c_addr, 0xC858, &readback);
-    sprintf(log_buf, "0xC858 scan mode: 0x%04X (expected 0x0009)\r\n", readback);
+    sprintf(log_buf, "0xC858 scan mode: 0x%04X\r\n", readback);
     Log(log_buf);
 
 
@@ -738,7 +737,7 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
         { 0xC838, 0x0000, "Orientation    0xC838 " },
         { 0xC881, 0x3232, "Flicker freq   0xC881 " },
         { 0xC96C, 0x0000, "Output format  0xC96C " },
-        { 0xC972, 0x0005, "Parallel ctrl  0xC972 " },			// TODO: Implement cam_params_t structure and check sensor reads against those values
+        { 0xC972, 0x0005, "Parallel ctrl  0xC972 " },
         { 0x001E, 0x0200, "Pad slew       0x001E " },
         //{ 0xC86C, 0x0001, "AE mode        0xC86C " },
         //{ 0xC86E, 0x003C, "AE target      0xC86E " },
@@ -835,10 +834,13 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
 
     /* Fill header */
     buf->designator    = designator;
-    buf->timestamp_MSB = (uint16_t)(HAL_GetTick() >> 16);			// TODO: Is this endianness correct?
+    buf->timestamp_MSB = (uint16_t)(HAL_GetTick() >> 16);		// TODO: Maybe it is best to save this timestamp as the TOTAL time since launch, not current uptime
     buf->timestamp_LSB = (uint16_t)(HAL_GetTick() & 0xFFFF);
-    buf->_pad          = 0x00;
-    memcpy((void *)buf->opcode, opcode, OPCODE_SIZE);
+
+    // Saved in uint16_t for memory alignment. Some bytes wasted, but negligible
+    for (int i = 0; i < OPCODE_SIZE; i++) {
+        buf->opcode[i] = (uint16_t)opcode[i];
+    }
 
     /* Arm DCMI */
     dcmi_frame_ready = 0;
@@ -864,7 +866,6 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
                                                 DCMI_MODE_SNAPSHOT,
                                                 (uint32_t)&buf->data[0],
                                                 H * L / 2);
-
 
     if (ret != HAL_OK) {
         Log("DCMI: start failed\r\n");
@@ -916,22 +917,31 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
 
 void InitCamParams(void)
 {
-	cam_params.ae_rule_algo_val = 0x0003; 		// TODO: See default for this
+	cam_params.ae_rule_algo_val = 0x0003; 		// TODO: Untested. Determine default for this
 	return;
 }
 
-uint8_t CompressRawPhoto(uint8_t buffer)
+uint8_t CompressRawPhoto(uint8_t buffer, int quality)
 {
-	compressed_metadata_t *metadata = COMPRESSED_METADATA(current_metadata_slot);		// TODO: Test if these are init ok from FRAM
-	compressed_photo_t *data = (compressed_photo_t *)current_data_address_sram;
+	volatile compressed_photo_t *compression = COMPRESSED_BUFFER(0);
+	volatile raw_photo_t *raw = RAW_BUFFER(buffer);
 
-	volatile raw_photo_t *buf = RAW_BUFFER(buffer);
+	char log_buf[64];
 
-	uint32_t compression_size = 0;
-	uint32_t buf_size = H*L;		// TODO: Change and implement how many memory is left
-	const int quality = 1;
+	uint32_t compression_size = 0;				// Will indicate size of compression
 
-	/* Compress photo and get metadata */
+    // Saved in uint16_t for memory alignment. Some bytes wasted, but negligible
+    for (int i = 0; i < OPCODE_SIZE; i++) {
+        compression->opcode[i] = raw->opcode[i];
+    }
+
+	compression->index = (board_status.compressions_done);
+	compression->designator = raw->designator;
+	compression->quality = quality;
+
+	compression->timestamp_LSB = raw->timestamp_LSB;
+	compression->timestamp_MSB = raw->timestamp_MSB;
+
 
 	//  PARAMETERS
 	//      memory_buffer:      pointer to memory buffer where JPEG will be written
@@ -946,18 +956,33 @@ uint8_t CompressRawPhoto(uint8_t buffer)
 	//
 	//  RETURN:
 	//      0 on error. 1 on success.
-	int ret = tje_encode_to_memory((uint8_t*)data,
-	                         buf_size,
+
+	sprintf(log_buf, "Before encode: compression_size=%lu\r\n", compression_size);
+	Log(log_buf);
+
+	int ret = tje_encode_to_memory((uint8_t*)compression->data,
+							 sizeof(compression->data),
 	                         &compression_size,
 	                         quality,
-	                         H,
 	                         L,
+	                         H,
 	                         3,
-	                         (const unsigned char*)buf);
+	                         (const unsigned char*)raw->data);
 
-	/* Save metadata and advance slot by one --> compressed_metadata_slot++; */
+	sprintf(log_buf, "After encode: ret=%d compression_size=%lu\r\n", ret, compression_size);
+	Log(log_buf);
 
-	/* Save compression and advance pointer --> current_data_address_sram += compression_size; (or something) */
+	compression->size_MSB = (uint16_t)(compression_size >> 16);
+	compression->size_LSB = (uint16_t)(compression_size & 0xFFFF);
 
+	if (ret == 0){
+		Log("Compression failed!\r\n");
+		return 0;
+	}
+
+
+	Log("Compression successful!\r\n");
+
+	// TODO: Save to FRAM pending
 	return 1;
 }

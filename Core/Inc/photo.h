@@ -20,8 +20,7 @@
 
 typedef struct __attribute__((packed)){
 	uint16_t designator;			  			// global raw photo number taken
-	uint8_t opcode[OPCODE_SIZE]; 				// opcodes sent to take picture
-    uint8_t  _pad;             					// explicit padding byte to keep alignment
+	uint16_t opcode[OPCODE_SIZE]; 				// opcodes sent to take picture
 	uint16_t timestamp_MSB;			      		// timestamp is uint32_t
 	uint16_t timestamp_LSB;
 	uint16_t data[L*H];               			// Image data in YCbCr 4:2:2 format
@@ -29,29 +28,28 @@ typedef struct __attribute__((packed)){
 
 typedef struct {
 	uint16_t ae_rule_algo_val; 					// Algorithm for auto exposure
-} cam_params_t;		// TODO: These settings will be the ones that can be changed. Other settings? For now, only exposure considered
+} cam_params_t;		// TODO: These settings will be the ones that can be changed. For now, only exposure considered
 
-// TODO: Fix this static assert
 typedef char static_assert_raw_photo_t_size[	// Static assert that a complete photo size is as expected, number left explicit on purpose
-    (sizeof(raw_photo_t) == 614412) ? 1 : -1
+    (sizeof(raw_photo_t) == 614416) ? 1 : -1
 ];
 
-// Aligned for 16b (SRAM). Will it be okay for 8b (FRAM)? TODO: Check
-typedef struct __attribute__((packed)){
-	uint16_t index;					  			// index of compressed photo
-	uint16_t *address;			  	 			// memory address start for picture
-	uint16_t size_MSB;			      			//compression size is uint32_t
-	uint16_t size_LSB;
-	uint16_t timestamp_MSB;			      		// timestamp is uint32_t
-	uint16_t timestamp_LSB;
-	uint8_t opcode[OPCODE_SIZE]; 				// opcodes sent to take picture
-	uint8_t  _pad;             					// explicit padding byte to keep alignment
-} compressed_metadata_t;
-
+// Aligned for 16b (SRAM)
 typedef struct __attribute__((packed)) {
-    uint16_t *data;  							// compressed photo data
+	uint16_t index;					  			// index of compressed photo
+	uint16_t designator;			  			// from which global raw photo number compression was done
+	uint16_t opcode[OPCODE_SIZE]; 				// opcodes sent to take original picture
+    uint16_t quality;             				// Compression quality
+	uint16_t size_MSB;			      			// Compression size is uint32_t
+	uint16_t size_LSB;
+	uint16_t timestamp_MSB;			      		// timestamp is uint32_t (timestamp of original picture)
+	uint16_t timestamp_LSB;
+	uint8_t  data[2*L*H];    					// Image data in YCbCr 4:2:2 format, at least as big as raw photo for different qualities
 } compressed_photo_t;
 
+typedef char static_assert_compressed_photo_t_size[	// Static assert that a compressed photo size is as expected, number left explicit on purpose
+    (sizeof(compressed_photo_t) == 614424) ? 1 : -1
+];
 
 /********************************************************************************
  * @brief  Asserts the shared camera reset line (RESET_BAR) LOW.
@@ -318,7 +316,6 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot, uint16_t designator, uint8_t  
 /********************************************************************************
  * @brief  Function to initialize changable CAM params default values
  *
- * TODO: Add other params?
  ********************************************************************************/
 void InitCamParams(void);
 
@@ -329,6 +326,6 @@ void InitCamParams(void);
  *
  * TODO: Comment pending
  ********************************************************************************/
-uint8_t CompressRawPhoto(uint8_t buffer);
+uint8_t CompressRawPhoto(uint8_t buffer, int quality);
 
 #endif

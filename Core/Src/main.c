@@ -100,6 +100,7 @@ int main(void)
   ignore_flag = 0;
 
   uint32_t timeout_start = 0;
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -133,17 +134,23 @@ int main(void)
   Log("UNSAM SpaceSnap initializing...\r\n");
   HAL_UARTEx_ReceiveToIdle_IT(&huart1, (uint8_t*) rx_buffer, AIRMAC_SIZE+1);		// Arms UART1 for IT reception
 
-  // TODO: Assign status of all peripherals to board_status_t
-  AssignSRAMMemory();																// Assigns SRAM pointers and runs integrity test
+  // Loads board status saved in FRAM
+  LoadBoardStatusFRAM();
+
+  // Clear volatile variables in memory (FRAM). These only make sense in current session
+  ResetVolatileStatus();
+
   GPIO_Init();																		// GPIO default config on startup
 
-  TestFRAM();																		// Tests integrity of FRAM
-  LoadBoardStatusFRAM();															// Loads board status saved in FRAM
+  // Memory init and tests
+  TestSRAM();																// Tests integrity of SRAM
+  TestFRAM();																// Tests integrity of FRAM
 
-  LogBoardStatus();																	// Logs current status to UART4 (debug)
-
+  // Init cam params
   InitCamParams();																	// Initializes changable default CAM params
 
+  // Prints Status with Log()
+  LogBoardStatus();																	// Logs current status to UART4 (debug)
 
   /* USER CODE END 2 */
 
@@ -162,7 +169,7 @@ int main(void)
 			  }
 			  break;
 
-		  case STATE_IGNORE:														// TODO: Might be a bug where RS485 auto-resets.
+		  case STATE_IGNORE:														// TODO: untested as of today because GPIO reset doensn't work
 
 			  if(ignore_flag == 0)													// Only transmit buffer first time this is executed
 			  {
@@ -483,7 +490,7 @@ static void MX_UART4_Init(void)
 
   /* USER CODE END UART4_Init 1 */
   huart4.Instance = UART4;
-  huart4.Init.BaudRate = 1500000;
+  huart4.Init.BaudRate = 460800;
   huart4.Init.WordLength = UART_WORDLENGTH_8B;
   huart4.Init.StopBits = UART_STOPBITS_1;
   huart4.Init.Parity = UART_PARITY_NONE;

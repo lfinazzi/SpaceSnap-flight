@@ -2,9 +2,6 @@
 
 extern SPI_HandleTypeDef hspi2;
 
-extern uint8_t current_metadata_slot;
-extern uint32_t current_data_address_sram;
-
 void FRAM_WriteByte(uint32_t addr, uint8_t data)
 {
     uint8_t buf[5];
@@ -63,10 +60,14 @@ void TestFRAM(void)
 					addrs[i], vals[i], r);
 			Log(log_buf);
 			ok = 0;
+			board_status.fram_ok = 0;		// FRAM init not ok
 		}
 	}
 
-	if(ok) Log("FRAM OK: start/mid/end passed\r\n");
+	if(ok){
+		Log("FRAM OK: start/mid/end passed\r\n");
+		board_status.fram_ok = 1;		// FRAM init ok
+	}
 }
 
 void SaveBoardStatusFRAM(void)
@@ -100,14 +101,6 @@ void LoadBoardStatusFRAM(void)
 
     // Increment boot count and save back
     board_status.boot_count++;
-    current_metadata_slot = board_status.compressed_metadata_slot;		// Loads this value from FRAM on startup
-
-    if (current_metadata_slot == 0){									// On first boot, point at this address
-    	current_data_address_sram = COMPRESSED_DATA_BASE_ADDRESS;
-    }
-    else {
-    	current_data_address_sram = board_status.compressed_data_sram_ptr;	// If not, load previous value
-    }
 
     SaveBoardStatusFRAM();
 }

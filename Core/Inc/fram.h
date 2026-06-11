@@ -19,6 +19,9 @@
 #define FRAM_CMD_READ   	(0x03U)  	// Read Memory
 
 
+#define MAX_COMPRESSED_PHOTOS           (100U)				// Maximum number of compressions possible
+
+
 /********************************************************************************
  * @brief  Writes a single byte to the FRAM at the specified address.
  *

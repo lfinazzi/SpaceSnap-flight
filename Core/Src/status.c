@@ -12,27 +12,28 @@ uint32_t hours = 0;
 uint32_t minutes = 0;
 uint32_t seconds = 0;
 
-extern uint8_t current_metadata_slot;
-extern uint32_t current_data_address_sram;
+uint32_t total_elapsed_ms = 0;
 
 void UpdateStatus(void)
 {
-    board_status.uptime_ms = HAL_GetTick();
-    board_status.compressed_metadata_slot = current_metadata_slot;
-    board_status.compressed_data_sram_ptr = current_data_address_sram;
+	uint32_t now = HAL_GetTick();
+	uint32_t delta_ms = now - board_status.uptime_ms;
 
-    // TODO: Add other parameters in board status. Note: Only uptime_ms and boot_count need to
-    //  be here, as other status variables are handled by photo taking commands
+	total_elapsed_ms += delta_ms;
+	board_status.total_uptime = total_elapsed_ms / 100;  	// 100 ms intervals
+	board_status.uptime_ms = now;
 }
 
 void LogBoardStatus(void)
 {
-    char log_buf[80];
+    char log_buf[96];
 
-    sprintf(log_buf, "Boot #%lu | Uptime: %lums | Photos: %u | Compressions: %u\r\n",
+    sprintf(log_buf, "Boot #%lu | Total uptime [s]: %lu | Photos: %u | Compressions: %u | FRAM/SRAM ok: %u/%u\r\n",
             board_status.boot_count,
-            board_status.uptime_ms,
+            board_status.total_uptime / 10,
             board_status.photos_taken,
-            board_status.compressions_done);
+            board_status.compressions_done,
+			board_status.fram_ok,
+			board_status.sram_ok);
     Log(log_buf);
 }
