@@ -728,7 +728,7 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr)
      * Change-Config sequence to take effect.
      * ========================================================================= */
 
-    Log("\r\n=== CAM_Init final verification ===\r\n");
+    Log("=== CAM_Init final verification ===\r\n");
 
     struct { uint16_t addr; uint16_t expected; const char *name; } checks[] = {
         { 0x0000, 0x2285, "Device ID             " },
@@ -980,9 +980,7 @@ uint8_t CompressRawPhoto(uint8_t buffer, int quality)
 		return 0;
 	}
 
-
 	Log("Compression successful!\r\n");
 
-	// TODO: Save to FRAM pending
 	return 1;
 }

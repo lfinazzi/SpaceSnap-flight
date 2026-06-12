@@ -60,7 +60,7 @@ typedef char sram_storage_ok[
  *********************************************************************************/
 void TestSRAM(void);
 
-// TODO: Comment
+// TODO: Comment, dumps in binary
 void DumpRawBuffer(uint8_t slot, uint32_t num_bytes);
 
 

@@ -136,6 +136,7 @@ int main(void)
 
   // Loads board status saved in FRAM
   LoadBoardStatusFRAM();
+  board_status.uptime_total += board_status.uptime_session / 1000;						// Loads the previous uptime to the total_uptime variable
 
   // Clear volatile variables in memory (FRAM). These only make sense in current session
   ResetVolatileStatus();
@@ -143,8 +144,8 @@ int main(void)
   GPIO_Init();																		// GPIO default config on startup
 
   // Memory init and tests
-  TestSRAM();																// Tests integrity of SRAM
-  TestFRAM();																// Tests integrity of FRAM
+  TestSRAM();																		// Tests integrity of SRAM
+  TestFRAM();																		// Tests integrity of FRAM
 
   // Init cam params
   InitCamParams();																	// Initializes changable default CAM params
@@ -318,11 +319,6 @@ static void MX_DCMI_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN DCMI_Init 2 */
-
-  // Read back immediately
-  char log_buf[64];
-  sprintf(log_buf, "DCMI CR after init: 0x%08lX\r\n", DCMI->CR);
-  Log(log_buf);
 
   /* USER CODE END DCMI_Init 2 */
 

@@ -18,8 +18,11 @@
 #define COMMAND_BUFFER_UNOCCUPIED					(76U)		// No photo saved in buffer
 #define COMMAND_BUFFER_OUT_OF_BOUNDS				(77U)		// Out of bounds access requested in buffer
 #define COMMAND_CAM_BOOT_ERROR						(78U)		// Camera not responsive on boot
-#define COMMAND_CAM_DCMI_ERROR						(79U)
-#define COMMAND_COMPRESS_ERROR						(80U)
+#define COMMAND_CAM_DCMI_ERROR						(79U)		// DCMI capture error
+#define COMMAND_COMPRESS_ERROR						(80U)		// JPEG compression error of raw buffer
+#define COMMAND_FRAM_FULL							(81U)		// Compressions not saved because FRAM is full
+#define COMMAND_BUFFER_INVALID						(82U)		// Buffer does not exist
+#define COMMAND_INDEX_FULL							(83U)		// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
 
 #define MIN_INTERVAL 						 		(1U) 		// Minutes in interval for STATE_DELAYED_PICTURE (max. waiting is 256*MIN_INTERVAL minutes)
 
@@ -30,21 +33,24 @@ extern uint8_t delayed_flag;									// Flag used to transmit scheduled command 
 extern uint8_t ignore_flag;										// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
 
 
-// Definition of command IDs
+// Definition of command IDs, starting at 0x33 are mission commands, starting at 0x11 are debug commands, 0x88 start of danger zone command
 typedef enum {
 	CMD_TAKE_PICTURE_ID         	= 0x33,
 	CMD_TAKE_PICTURE_DELAYED_ID,   // 0x34
 	CMD_CHANGE_CAM_PARAMS_ID,	   // 0x35
 	CMD_COMPRESS_PHOTO_ID,		   // 0x36
-	// ... add more here
+	CMD_SEND_RAW_FRAME_ID,		   // 0x37
+	CMD_SEND_COMP_FRAME_ID,  	   // 0x38
+	CMD_SEND_RAW_HEADER_ID,		   // 0x39
+	CMD_SEND_COMP_HEADER_ID,	   // 0x3A
+	CMD_GET_STATUS_ID,             // 0x3B
 
-	CMD_DUMP_RAW_ID        			= 0x60,
-	CMD_DUMP_COMPRESSED_ID 			= 0x61,
+	CMD_DUMP_RAW_ID        			= 0x11,
+	CMD_DUMP_COMPRESSED_ID 			= 0x12,
 
-	CMD_GET_STATUS_ID               = 0x63,
+	CMD_ERASE_FRAM_ID			    = 0x88,
+	CMD_FORCE_RESET_ID			    = 0x89,
 
-	CMD_ERASE_FRAM_ID			    = 0x88
-	// ... add more here
 } cmd_id_t;
 
 // Assignment of command returns with macro values
@@ -58,7 +64,10 @@ typedef enum {
 	CMD_BUFFER_OOB = COMMAND_BUFFER_OUT_OF_BOUNDS,				// Out of bounds buffer access
 	CMD_CAM_BOOT_ERROR = COMMAND_CAM_BOOT_ERROR,				// Camera not responsive on boot
 	CMD_CAM_DCMI_ERROR = COMMAND_CAM_DCMI_ERROR,				// Photo could not be captured through DCMI
-	CMD_COMPRESS_ERROR = COMMAND_COMPRESS_ERROR					// Photo could not be compressed
+	CMD_COMPRESS_ERROR = COMMAND_COMPRESS_ERROR,				// Photo could not be compressed
+	CMD_FRAM_FULL = COMMAND_FRAM_FULL,							// Compressions not saved because FRAM is full
+	CMD_BUFFER_INVALID = COMMAND_BUFFER_INVALID,				// Buffer number does not exist
+	CMD_INDEX_FULL = COMMAND_INDEX_FULL							// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
 	// ... add more here
 } CMD_ReturnStatus;
 
@@ -232,6 +241,66 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode);
  * @returns CMD_OK
  *********************************************************************************/
 CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode);
+
+/********************************************************************************
+ * @brief  Performs software reset of USS
+ *
+ * @param  opcode  unused
+ *
+ * @returns none
+ *********************************************************************************/
+CMD_ReturnStatus CMD_ForceReset(uint8_t *opcode);
+
+/********************************************************************************
+ * @brief  Sends a Frame in raw buffer back to GS. Will always send 117 bytes
+ * 		   starting from address provided.
+ * 		   Frame 1 is opcode 00 00 00 00
+ * 		   Frame 2 is opcode 00 00 00 75
+ * 		   Frame 3 is opcode 00 00 00 EA
+ * 		   ...
+ *
+ * @param  opcode   opcode[0]: raw buffer selected
+ *                  opcode[1:4]: start address
+ *
+ * @returns CMD_OK if success
+ *********************************************************************************/
+CMD_ReturnStatus CMD_SendRawFrame(uint8_t *opcode);
+
+/********************************************************************************
+ * @brief  Sends a compressed Frame in FRAM back to GS. Will always send 117 bytes
+ * 		   starting from address provided.
+ * 		   Frame 1 is opcode 00 00 00 00
+ * 		   Frame 2 is opcode 00 00 00 75
+ * 		   Frame 3 is opcode 00 00 00 EA
+ * 		   ...
+ *
+ * @param  opcode   opcode[0]: compression selected in FRAM
+ *                  opcode[1:4]: start address
+ *
+ * @returns none		TODO: Document this
+ *********************************************************************************/
+CMD_ReturnStatus CMD_SendCompFrame(uint8_t *opcode);
+
+/********************************************************************************
+ * @brief  Sends a raw buffer header with metadata
+ * 		   ...
+ *
+ * @param  opcode   opcode[0]: raw buffer selected
+ *
+ * @returns CMD_OK if success
+ *********************************************************************************/
+CMD_ReturnStatus CMD_SendRawHeader(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Sends a compressed header with metadata
+ * 		   ...
+ *
+ * @param  opcode   opcode[0]: compressed photo selected in compression table
+ *
+ * @returns CMD_OK if success
+ *********************************************************************************/
+CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode);
 
 
 // Command Table definition lives in command.c — add new entries there

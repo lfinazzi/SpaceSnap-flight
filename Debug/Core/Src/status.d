@@ -1,5 +1,5 @@
 Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
- ../Core/Inc/command.h ../Core/Inc/comms.h ../Core/Inc/main.h \
+ ../Core/Inc/command.h ../Core/Inc/fram.h ../Core/Inc/main.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h \
  ../Core/Inc/stm32f2xx_hal_conf.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_rcc.h \
@@ -33,12 +33,12 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim_ex.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h \
- ../Core/Inc/sram.h ../Core/Inc/photo.h ../Core/Inc/main.h \
- ../Core/Inc/fram.h ../Core/Inc/status.h ../Core/Inc/comms.h \
- ../Core/Inc/irq.h ../Core/Inc/gpio.h
+ ../Core/Inc/sram.h ../Core/Inc/photo.h ../Core/Inc/comms.h \
+ ../Core/Inc/status.h ../Core/Inc/irq.h ../Core/Inc/gpio.h \
+ ../Core/Inc/comms.h ../Core/Inc/main.h
 ../Core/Inc/status.h:
 ../Core/Inc/command.h:
-../Core/Inc/comms.h:
+../Core/Inc/fram.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h:
 ../Core/Inc/stm32f2xx_hal_conf.h:
@@ -75,9 +75,9 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h:
 ../Core/Inc/sram.h:
 ../Core/Inc/photo.h:
-../Core/Inc/main.h:
-../Core/Inc/fram.h:
-../Core/Inc/status.h:
 ../Core/Inc/comms.h:
+../Core/Inc/status.h:
 ../Core/Inc/irq.h:
 ../Core/Inc/gpio.h:
+../Core/Inc/comms.h:
+../Core/Inc/main.h:

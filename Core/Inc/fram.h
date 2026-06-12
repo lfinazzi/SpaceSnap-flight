@@ -19,9 +19,6 @@
 #define FRAM_CMD_READ   	(0x03U)  	// Read Memory
 
 
-#define MAX_COMPRESSED_PHOTOS           (100U)				// Maximum number of compressions possible
-
-
 /********************************************************************************
  * @brief  Writes a single byte to the FRAM at the specified address.
  *
@@ -58,6 +55,7 @@ uint8_t FRAM_ReadByte(uint32_t addr);
  ********************************************************************************/
 void TestFRAM(void);
 
+
 /********************************************************************************
  * @brief  Writes board status to FRAM so it can be preserved in the case of
  *         power down.
@@ -67,6 +65,7 @@ void TestFRAM(void);
  *         global board_status variable is up to date before calling.
  ********************************************************************************/
 void SaveBoardStatusFRAM(void);
+
 
 /********************************************************************************
  * @brief  Loads board status from FRAM into the global board_status struct
@@ -79,7 +78,36 @@ void SaveBoardStatusFRAM(void);
  ********************************************************************************/
 void LoadBoardStatusFRAM(void);
 
+
 // Will flag FRAM to be erased next boot and initialized to zero
 void EraseFRAMOnNextBoot(void);
+
+/********************************************************************************
+ * @brief  Save a buffer from SRAM into FRAM using a single burst write.
+ *
+ * For CY15B116x (16Mb, 2048K x 8) — 21-bit address space.
+ * Opcode 0x02 (WRITE), 3-byte address, burst data with CS held LOW.
+ * Address auto-increments; rolls over from 0x1FFFFF to 0x000000.
+ *
+ * @param  buffer       Pointer to source data (uint8_t array).
+ * @param  size         Number of bytes to write.
+ * @param  fram_address Starting FRAM address (must be <= 0x1FFFFF).
+ */
+ void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address);
+
+ /**
+  * @brief  Read a buffer from FRAM into SRAM using a single burst read.
+  *
+  * Per CY15B108QSN datasheet section (READ, opcode 0x03):
+  *   - Single READ command with 3-byte address, then stream data in with CS held LOW
+  *   - Internal address counter auto-increments after each byte
+  *   - No latency/dummy cycles required for standard READ at SPI mode
+  *
+  * @param  buffer       Destination buffer in SRAM (uint8_t array).
+  * @param  size         Number of bytes to read.
+  * @param  fram_address Starting FRAM address (must be <= 0x1FFFFF for 16Mb).
+  */
+ void ReadBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address);
+
 
 #endif

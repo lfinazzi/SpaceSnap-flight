@@ -3,6 +3,7 @@
 #include "status.h"
 #include "sram.h"
 #include "comms.h"
+#include "fram.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -19,10 +20,15 @@ const command_t command_table[] = {
     { "CMD_TakePictureDelayed", CMD_TAKE_PICTURE_DELAYED_ID,  CMD_TakePictureDelayed,  HAS_OPCODE},
     { "CMD_ChangeCamParams",    CMD_CHANGE_CAM_PARAMS_ID,     CMD_ChangeCamParams,     HAS_OPCODE},
     { "CMD_CompressRawPhoto",   CMD_COMPRESS_PHOTO_ID,     	  CMD_CompressRawPhoto,    HAS_OPCODE},
-    { "CMD_GetStatus",          CMD_GET_STATUS_ID,            CMD_GetStatus,           NO_OPCODE},
+    { "CMD_GetStatus",          CMD_GET_STATUS_ID,            CMD_GetStatus,           NO_OPCODE },
     { "CMD_DumpRaw",   			CMD_DUMP_RAW_ID,     		  CMD_DumpRaw,    		   HAS_OPCODE},
-    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   NO_OPCODE},
-	{ "CMD_DumpCompressed",   	CMD_DUMP_COMPRESSED_ID,       CMD_DumpCompressed,      NO_OPCODE},
+    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   NO_OPCODE },
+	{ "CMD_DumpCompressed",   	CMD_DUMP_COMPRESSED_ID,       CMD_DumpCompressed,      NO_OPCODE },
+	{ "CMD_ForceReset",   		CMD_FORCE_RESET_ID,       	  CMD_ForceReset,          NO_OPCODE },
+	{ "CMD_SendRawFrame",   	CMD_SEND_RAW_FRAME_ID,        CMD_SendRawFrame,        HAS_OPCODE},
+	{ "CMD_SendCompFrame",   	CMD_SEND_COMP_FRAME_ID,       CMD_SendCompFrame,       HAS_OPCODE},
+	{ "CMD_SendRawHeader",   	CMD_SEND_RAW_HEADER_ID,       CMD_SendRawHeader,       HAS_OPCODE},
+	{ "CMD_SendCompHeader",   	CMD_SEND_COMP_HEADER_ID,      CMD_SendCompHeader,      HAS_OPCODE},
     // ... add more here
 };
 
@@ -66,6 +72,18 @@ void ReturnCode(CMD_ReturnStatus st)
 	}
 	else if (st == CMD_CAM_DCMI_ERROR) {
 		tx_buffer[1] = COMMAND_CAM_DCMI_ERROR;
+	}
+	else if (st == CMD_COMPRESS_ERROR) {
+			tx_buffer[1] = COMMAND_COMPRESS_ERROR;
+	}
+	else if (st == CMD_FRAM_FULL) {
+			tx_buffer[1] = COMMAND_FRAM_FULL;
+	}
+	else if (st == CMD_BUFFER_INVALID) {
+			tx_buffer[1] = COMMAND_BUFFER_INVALID;
+	}
+	else if (st == CMD_INDEX_FULL) {
+			tx_buffer[1] = COMMAND_INDEX_FULL;
 	}
 	// TODO: when implementing Commands, different runtime errors will be handled here! Add accordingly.
 }
@@ -116,14 +134,18 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
 CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 {
 	char log_buf[64];
-	// TODO: Opcode parsing
 
-	uint8_t cam_number 		= opcode[0] & 0x0F;			// 0000_1111 mask,
-	uint8_t buffer_number 	= opcode[0] & 0xF0;	    	// 1111_0000 mask
+	uint8_t cam_number 		= opcode[0] & 0x0F;					// 0000_1111 mask,
+	uint8_t buffer_number 	= (opcode[0] & 0xF0) >> 4;;	    	// 1111_0000 mask, upper nibble
 	uint8_t filter_flag 	= opcode[1];
 	uint8_t tries 		 	= opcode[2];
 	uint8_t black_threshold = opcode[3];
 	// opcode 4 unused here
+
+	if (buffer_number >= RAW_PHOTO_COUNT) {
+		Log("Invalid buffer number!\r\n");
+		return CMD_BUFFER_INVALID;
+	}
 
 	if(cam_number == 0){
 		ActivateCAMA();
@@ -170,9 +192,10 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 		HAL_Delay(10);
 		DeactivateCAMB();
 	}
-	else
+	else{
 		Log("Wrong camera number!\r\n");
 		return CMD_CAM_BOOT_ERROR;
+	}
 
 
 	board_status.photos_taken++; 		// Increment the number of photos taken
@@ -222,10 +245,12 @@ CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode) {
  */
 CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
 {
-    board_status.uptime_ms = HAL_GetTick();
-    _Static_assert(sizeof(board_status_t) <= AIRMAC_SIZE - 1, "board_status_t too large for tx_buffer");	// static assert for status_t size
+    board_status.uptime_session = HAL_GetTick();
+    airmac_board_status.uptime_session = board_status.uptime_session;
 
-    memcpy(&tx_buffer[1], &board_status, sizeof(board_status_t));		// outputs the board status to the tx_buffer
+    _Static_assert(sizeof(airmac_board_status_t) <= AIRMAC_SIZE - 1, "board_status_t too large for tx_buffer");	// static assert for airmac_board_status_t size
+
+    memcpy(&tx_buffer[1], &airmac_board_status, sizeof(airmac_board_status_t));		// outputs the abridged board status to the tx_buffer (which is too large)
 
     return CMD_OK;
 }
@@ -236,6 +261,12 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
 CMD_ReturnStatus CMD_DumpRaw(uint8_t *opcode)
 {
 	uint8_t slot = opcode[0];
+
+	if (slot >= RAW_PHOTO_COUNT) {
+		Log("Invalid buffer number!\r\n");
+		return CMD_BUFFER_INVALID;
+	}
+
 	raw_photo_t *raw = (raw_photo_t *)RAW_BUFFER(slot);
 	char log_buf[64];
 
@@ -259,11 +290,12 @@ CMD_ReturnStatus CMD_DumpRaw(uint8_t *opcode)
 /*
  * No opcode, can include it in case of many compressed buffers
  */
-// TODO: Check how to make the program drop less UART frames to avoid noisiness in images
 CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode)
 {
 	compressed_photo_t *compression = COMPRESSED_BUFFER(0);		// Only one compressed buffer
 	char log_buf[64];
+
+	// TODO: Check if there is no compression
 
 	sprintf(log_buf, "  opcode:    %02X %02X %02X %02X %02X\r\n",
 	        compression->opcode[0],
@@ -316,14 +348,54 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode)
 	int quality = opcode[1];
 	uint8_t ret = 0;
 
+	if (buffer >= RAW_PHOTO_COUNT) {
+		Log("Invalid buffer number!\r\n");
+		return CMD_BUFFER_INVALID;
+	}
+
 	Log("Photo compression initiated.\r\n");
 	ret = CompressRawPhoto(buffer, quality);
-	if (ret == 0)		// Compression failed
+	if (ret == 0){		// Compression failed
+		Log("Compression error!\r\n");
 		return CMD_COMPRESS_ERROR;
+	}
 
-	// TODO: Save in FRAM and advance pointer
+	// Saves compression in FRAM and advances status pointer
+	compressed_photo_t *compression = COMPRESSED_BUFFER(0);
+	uint32_t jpeg_size = ((uint32_t)compression->size_MSB << 16) | compression->size_LSB;
+	uint32_t header_size = sizeof(compressed_photo_t) - sizeof(compression->data);
+	uint32_t total_size  = header_size + jpeg_size;
 
-	board_status.compressions_done++;
+	if (board_status.compression_ptr_address + total_size > 0x200000) {		// Checks if FRAM will overflow
+		Log("FRAM full — cannot save compression.\r\n");
+		return CMD_FRAM_FULL;
+	}
+
+	if (board_status.compression_count >= MAX_COMPRESSED_PHOTOS) {
+		Log("Compression index full.\r\n");
+		return CMD_INDEX_FULL;
+	}
+
+	uint16_t idx = board_status.compression_count;
+	board_status.compression_table[idx].fram_address = board_status.compression_ptr_address;
+	board_status.compression_table[idx].total_size   = total_size;
+	board_status.compression_table[idx].valid        = 1;
+
+	char log_buf[96];
+	sprintf(log_buf, "Index[%u].fram_address = 0x%06lX\r\n", idx, board_status.compression_table[idx].fram_address);
+	Log(log_buf);
+
+	// Save header (everything before data[])
+	SaveBufferFRAM((uint8_t *)compression, header_size, board_status.compression_ptr_address);
+	board_status.compression_ptr_address += header_size;
+
+	// Save JPEG data
+	SaveBufferFRAM(compression->data, jpeg_size, board_status.compression_ptr_address);
+	board_status.compression_ptr_address += jpeg_size;
+
+	// Increment number of compressions in memory by one
+	board_status.compression_count++;
+
 	return CMD_OK;
 }
 
@@ -336,8 +408,145 @@ CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode)
 	return CMD_OK;
 }
 
+CMD_ReturnStatus CMD_ForceReset(uint8_t *opcode)
+{
+    Log("Forced reset requested. Resetting...\r\n");
 
+    tx_buffer[1] = COMMAND_SUCCESS;		// Force to send a successful message to GS before reset
+    TransmitBufferRS485();				// Sends the message through RS485
 
+    __disable_irq();
+
+    // Reconfigure IWDG for fastest possible timeout (~125us with prescaler 4, reload 0)
+    hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
+    hiwdg.Init.Reload    = 0;
+    HAL_IWDG_Init(&hiwdg);
+
+    while (1) {
+        // IWDG fires almost immediately
+    }
+    return HAL_OK;	// This will never be reached
+}
+
+// TODO: other function to send header
+
+CMD_ReturnStatus CMD_SendRawFrame(uint8_t *opcode)
+{
+	uint8_t slot = opcode[0];		// buffer selected
+	uint32_t offset = ((uint32_t)opcode[1] << 24) | ((uint32_t)opcode[2] << 16) |
+	                   ((uint32_t)opcode[3] <<  8) |  (uint32_t)opcode[4];				// start address
+
+	if (slot >= RAW_PHOTO_COUNT) {
+		Log("Invalid buffer number!\r\n");
+		return CMD_BUFFER_INVALID;
+	}
+
+	volatile raw_photo_t *raw_buffer = RAW_BUFFER(slot);
+
+	// 117 bytes of payload per chunk (AIRMAC_SIZE = 119, first 2 bytes reserved)
+	uint32_t frame_size = sizeof(raw_buffer->data);  // 614400 bytes
+
+	if (offset >= frame_size) return CMD_BUFFER_OOB;
+
+	uint32_t chunk_size = AIRMAC_SIZE - 2;  // 117
+	uint32_t remaining  = frame_size - offset;
+	if (chunk_size > remaining) chunk_size = remaining;  // last chunk: 33 bytes
+
+	// Populates tx_buffer with response frame starting at correct address
+	memcpy(&tx_buffer[2], (uint8_t*)raw_buffer->data + offset, chunk_size);
+
+	// Zero-pad if this is the final partial chunk
+	if (chunk_size < (AIRMAC_SIZE - 2)) {
+		memset(&tx_buffer[2 + chunk_size], 0, (AIRMAC_SIZE - 2) - chunk_size);
+	}
+
+	return CMD_OK;
+}
+
+CMD_ReturnStatus CMD_SendCompFrame(uint8_t *opcode)
+{
+	uint8_t  index  = opcode[0];
+	uint32_t offset = ((uint32_t)opcode[1] << 24) | ((uint32_t)opcode[2] << 16) |
+	                   ((uint32_t)opcode[3] <<  8) |  (uint32_t)opcode[4];				// start address
+
+	if (index >= board_status.compression_count) return CMD_BUFFER_INVALID;
+	if (!board_status.compression_table[index].valid) return CMD_BUFFER_INVALID;
+
+	uint32_t header_size = sizeof(compressed_photo_t) - (2*L*H);  // size of compressed photo header
+	uint32_t total_size  = board_status.compression_table[index].total_size;
+	uint32_t jpeg_size   = total_size - header_size;
+	uint32_t jpeg_start  = board_status.compression_table[index].fram_address + header_size;
+
+	if (offset >= jpeg_size) return CMD_BUFFER_OOB;
+
+	uint32_t chunk_size = AIRMAC_SIZE - 2;  // 117
+	uint32_t remaining  = jpeg_size - offset;
+	if (chunk_size > remaining) chunk_size = remaining;  // last chunk: partial
+
+	ReadBufferFRAM(&tx_buffer[2], chunk_size, jpeg_start + offset);
+
+	// Zero-pad if this is the final partial chunk
+	if (chunk_size < (AIRMAC_SIZE - 2)) {
+		memset(&tx_buffer[2 + chunk_size], 0, (AIRMAC_SIZE - 2) - chunk_size);
+	}
+
+	return CMD_OK;
+}
+
+CMD_ReturnStatus CMD_SendRawHeader(uint8_t *opcode)
+{
+	uint8_t slot = opcode[0];		// buffer selected
+
+	if (slot >= RAW_PHOTO_COUNT) {
+		Log("Invalid buffer number!\r\n");
+		return CMD_BUFFER_INVALID;
+	}
+
+	volatile raw_photo_t *raw_buffer = RAW_BUFFER(slot);
+
+	// Header = everything before data[]: designator, opcode[5], timestamp_MSB, timestamp_LSB
+	uint32_t header_size = sizeof(raw_photo_t) - sizeof(raw_buffer->data);  // header only!
+
+	// Header is small and fixed-size — fits in a single response, no chunking needed
+	memcpy(&tx_buffer[2], (uint8_t*)raw_buffer, header_size);
+
+	return CMD_OK;
+}
+
+CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode)
+{
+	uint8_t index = opcode[0];
+	char verify_buf[96];
+
+	if (index >= board_status.compression_count) return CMD_BUFFER_INVALID;
+	if (!board_status.compression_table[index].valid) return CMD_BUFFER_INVALID;
+
+	uint32_t fram_address = board_status.compression_table[index].fram_address;
+
+	// Header = everything before data[]: index, designator, opcode[5],
+	// quality, size_MSB, size_LSB, timestamp_MSB, timestamp_LSB
+	uint32_t header_size = sizeof(compressed_photo_t) - (2*L*H);  // 24 bytes
+
+	sprintf(verify_buf, "Reading index=%u, fram_address=0x%06lX, valid=%u, compression_count=%u\r\n",
+	        index,
+	        board_status.compression_table[index].fram_address,
+	        board_status.compression_table[index].valid,
+	        board_status.compression_count);
+	Log(verify_buf);
+
+	// Header is small and fixed-size — fits in a single response, no chunking needed. Write directly to tx_buffer
+	ReadBufferFRAM(&tx_buffer[2], header_size, fram_address);
+
+	// Print what was actually read into tx_buffer
+	int pos = sprintf(verify_buf, "Header at 0x%06lX: ", fram_address);
+	for (int i = 0; i < (int)header_size; i++) {
+		pos += sprintf(verify_buf + pos, "%02X ", tx_buffer[2 + i]);
+	}
+	sprintf(verify_buf + pos, "\r\n");
+	Log(verify_buf);
+
+	return CMD_OK;
+}
 
 
 

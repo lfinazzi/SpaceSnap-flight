@@ -28,7 +28,7 @@
 ../Core/Src/photo.c:239:10:CAM_GetState	2
 ../Core/Src/photo.c:256:19:CAM_WriteReg	1
 ../Core/Src/photo.c:271:19:CAM_ReadReg	1
-../Core/Src/photo.c:287:19:CAM_Init	8
-../Core/Src/photo.c:827:19:Photo_CaptureRaw	8
-../Core/Src/photo.c:919:6:InitCamParams	1
-../Core/Src/photo.c:925:9:CompressRawPhoto	3
+../Core/Src/photo.c:286:19:CAM_Init	8
+../Core/Src/photo.c:826:19:Photo_CaptureRaw	8
+../Core/Src/photo.c:918:6:InitCamParams	1
+../Core/Src/photo.c:924:9:CompressRawPhoto	3

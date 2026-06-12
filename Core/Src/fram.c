@@ -89,6 +89,7 @@ void LoadBoardStatusFRAM(void)
 		// First boot — zero out struct and save
 		Log("First boot detected, initializing FRAM...\r\n");
 		memset(&board_status, 0, PHOTO_DATA_START);
+		board_status.compression_ptr_address = PHOTO_DATA_START;
 		FRAM_WriteByte(FRAM_MAGIC_ADDR, FRAM_MAGIC_VAL);			// writes a value in last position to flag that this is not first boot
 	}
 	else
@@ -109,4 +110,57 @@ void EraseFRAMOnNextBoot(void)
 {
 	FRAM_WriteByte(FRAM_MAGIC_ADDR, 0x00);
 	return;
+}
+
+/**
+ * @brief  Save a buffer from SRAM into FRAM using a single burst write.
+ *
+ * For CY15B116x (16Mb, 2048K x 8) — 21-bit address space.
+ * Opcode 0x02 (WRITE), 3-byte address, burst data with CS held LOW.
+ * Address auto-increments; rolls over from 0x1FFFFF to 0x000000.
+ *
+ * @param  buffer       Pointer to source data (uint8_t array).
+ * @param  size         Number of bytes to write.
+ * @param  fram_address Starting FRAM address (must be <= 0x1FFFFF).
+ */
+void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
+{
+    uint8_t cmd[4];
+
+    if (fram_address + size > 0x200000) {
+        return;  // would wrap past 16Mb boundary
+    }
+
+    /* Write Enable Latch */
+    FRAM_CS_LOW();
+    cmd[0] = FRAM_CMD_WREN;
+    HAL_SPI_Transmit(&hspi2, cmd, 1, HAL_MAX_DELAY);
+    FRAM_CS_HIGH();
+
+    /* WRITE command + 21-bit address, then burst data */
+    FRAM_CS_LOW();
+    cmd[0] = FRAM_CMD_WRITE;
+    cmd[1] = (fram_address >> 16) & 0xFF;   // A[20:16]
+    cmd[2] = (fram_address >>  8) & 0xFF;   // A[15:8]
+    cmd[3] = (fram_address >>  0) & 0xFF;   // A[7:0]
+    HAL_SPI_Transmit(&hspi2, cmd, 4, HAL_MAX_DELAY);
+
+    HAL_SPI_Transmit(&hspi2, buffer, size, HAL_MAX_DELAY);
+
+    FRAM_CS_HIGH();
+}
+
+
+void ReadBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
+{
+    uint8_t cmd[4];
+
+    FRAM_CS_LOW();
+    cmd[0] = FRAM_CMD_READ;
+    cmd[1] = (fram_address >> 16) & 0xFF;   // A[20:16]
+    cmd[2] = (fram_address >>  8) & 0xFF;   // A[15:8]
+    cmd[3] = (fram_address >>  0) & 0xFF;   // A[7:0]
+    HAL_SPI_Transmit(&hspi2, cmd, 4, HAL_MAX_DELAY);
+    HAL_SPI_Receive(&hspi2, buffer, size, HAL_MAX_DELAY);
+    FRAM_CS_HIGH();
 }
