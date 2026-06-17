@@ -47,6 +47,8 @@ typedef enum {
 
 	CMD_DUMP_RAW_ID        			= 0x11,
 	CMD_DUMP_COMPRESSED_ID 			= 0x12,
+	CMD_DUMP_SRAM_BIN_ID        	= 0x13,
+	CMD_DUMP_FRAM_BIN_ID 			= 0x14,
 
 	CMD_ERASE_FRAM_ID			    = 0x88,
 	CMD_FORCE_RESET_ID			    = 0x89,
@@ -93,6 +95,7 @@ typedef struct {
     uint8_t instruction_number;       // Numeric command ID
     command_handler_t handler;        // Function pointer to execute
     int takes_opcode;		      	  // Indicates if instruction takes opcode
+    uint8_t return_size;			  // Size in bytes for return
 } command_t;
 
 

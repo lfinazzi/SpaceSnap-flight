@@ -1,8 +1,9 @@
-../Core/Src/fram.c:5:6:FRAM_WriteByte	24	static
-../Core/Src/fram.c:26:9:FRAM_ReadByte	24	static
-../Core/Src/fram.c:43:6:TestFRAM	112	static
-../Core/Src/fram.c:73:6:SaveBoardStatusFRAM	16	static
-../Core/Src/fram.c:84:6:LoadBoardStatusFRAM	24	static
-../Core/Src/fram.c:109:6:EraseFRAMOnNextBoot	8	static
-../Core/Src/fram.c:126:6:SaveBufferFRAM	32	static
-../Core/Src/fram.c:154:6:ReadBufferFRAM	32	static
+../Core/Src/fram.c:6:6:FRAM_WriteByte	24	static
+../Core/Src/fram.c:27:9:FRAM_ReadByte	24	static
+../Core/Src/fram.c:44:9:FRAM_ReadDeviceID	24	static
+../Core/Src/fram.c:56:9:TestFRAM	72	static
+../Core/Src/fram.c:78:6:SaveBoardStatusFRAM	24	static
+../Core/Src/fram.c:96:6:LoadBoardStatusFRAM	40	static
+../Core/Src/fram.c:124:6:EraseFRAM	16	static
+../Core/Src/fram.c:154:6:SaveBufferFRAM	32	static
+../Core/Src/fram.c:182:6:ReadBufferFRAM	32	static

@@ -44,12 +44,12 @@ void TransmitBufferUART(void)
 
 void TransmitBufferRS485(void)
 {
-	tx_buffer[0] = RESPONSE_INIT_BYTE; 										// An init byte to identify USS responses
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);						// RE high (disabled)
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);						// DE high (enabled)
-	HAL_UART_Transmit(&huart1, (uint8_t*) tx_buffer, AIRMAC_SIZE, 200);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);					// RE low (enabled)
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);					// DE low (disabled)
+	tx_buffer[0] = RESPONSE_INIT_BYTE; 																	// An init byte to identify USS responses
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);													// RE high (disabled)
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);													// DE high (enabled)
+	HAL_UART_Transmit(&huart1, (uint8_t*) tx_buffer, current_command_pointer->return_size + 2, 200);	// Return tailored for each command, header is fixed (2B)
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);												// RE low (enabled)
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);												// DE low (disabled)
 
 	ClearTxBuffer();
 	ResetLS02();
@@ -80,7 +80,7 @@ CMD_ReturnStatus LoadInstructionBuffer(void)
 		memset(instr_opcode, 0, sizeof(instr_opcode));							// fills opcode with zeroes, unused here
 	}
 	else if (rx_size == OPCODE_SIZE+2 && cmd->takes_opcode == HAS_OPCODE){		// instruction with opcode
-		for(int i = 2; i < OPCODE_SIZE+2; i++){
+		for(int i = 2; i < OPCODE_SIZE+2; i++){		// First two bytes are: USS_ID designator, instruction to execute
 			instr_opcode[i-2] = rx_buffer[i];
 		}
 	}

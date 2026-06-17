@@ -30,5 +30,5 @@
 ../Core/Src/photo.c:271:19:CAM_ReadReg	1
 ../Core/Src/photo.c:286:19:CAM_Init	8
 ../Core/Src/photo.c:826:19:Photo_CaptureRaw	8
-../Core/Src/photo.c:918:6:InitCamParams	1
-../Core/Src/photo.c:924:9:CompressRawPhoto	3
+../Core/Src/photo.c:922:6:InitCamParams	1
+../Core/Src/photo.c:928:9:CompressRawPhoto	3

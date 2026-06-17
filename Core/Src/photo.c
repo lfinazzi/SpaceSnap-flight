@@ -834,8 +834,8 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
 
     /* Fill header */
     buf->designator    = designator;
-    buf->timestamp_MSB = (uint16_t)(HAL_GetTick() >> 16);		// TODO: Maybe it is best to save this timestamp as the TOTAL time since launch, not current uptime
-    buf->timestamp_LSB = (uint16_t)(HAL_GetTick() & 0xFFFF);
+    buf->timestamp_MSB = (uint16_t)(board_status.uptime_total >> 16);
+    buf->timestamp_LSB = (uint16_t)(board_status.uptime_total & 0xFFFF);
 
     // Saved in uint16_t for memory alignment. Some bytes wasted, but negligible
     for (int i = 0; i < OPCODE_SIZE; i++) {
@@ -910,6 +910,10 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
         Log(log_buf);
     }
 
+	// TODO: Assign black pixels LSB and MSB for this photo, for now 0. Will need to change this a little to write this val outside this function (in CMD)
+	buf->black_pixels_LSB = 0;
+	buf->black_pixels_MSB = 0;
+
 
     Log("DCMI: frame captured\r\n");
     return HAL_OK;
@@ -974,6 +978,10 @@ uint8_t CompressRawPhoto(uint8_t buffer, int quality)
 
 	compression->size_MSB = (uint16_t)(compression_size >> 16);
 	compression->size_LSB = (uint16_t)(compression_size & 0xFFFF);
+
+	// Record number of black pixels from raw. Unused (0x00000000) if no black filtering was performed
+	compression->black_pixels_LSB = raw->black_pixels_LSB;
+	compression->black_pixels_MSB = raw->black_pixels_MSB;
 
 	if (ret == 0){
 		Log("Compression failed!\r\n");

@@ -5,10 +5,17 @@
 #include "main.h"
 #include "status.h"
 
-#define PHOTO_DATA_START 	sizeof(board_status_t)			// compressed space starts after status information, which starts at 0x00000000
+#define BOARD_STATUS_START 				(0x000000)							// Address to save board status
 
-#define FRAM_MAGIC_ADDR  0x0FFFFE   						// last 2 bytes of FRAM
-#define FRAM_MAGIC_VAL   0xAB
+#define COMPRESSION_TABLE_START 		((BOARD_STATUS_START) + (sizeof(board_status_t)))		// compressed space starts after status information, which starts at 0x00000000
+
+#define PHOTO_DATA_START				((COMPRESSION_TABLE_START) + ((sizeof(compression_index_entry_t))*(MAX_COMPRESSED_PHOTOS)))		// Space for compressions
+
+#define FIRMWARE_BACKUP_SIZE			(0x40000)		// 256 kB for FW backup image
+
+#define END_OF_FRAM						(0x200000)		// 2 MB
+
+#define FIRMWARE_BACKUP_START 			((END_OF_FRAM) - (FIRMWARE_BACKUP_SIZE))
 
 // Pin PB12
 #define FRAM_CS_LOW()   	HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_RESET)
@@ -48,12 +55,22 @@ uint8_t FRAM_ReadByte(uint32_t addr);
 
 
 /********************************************************************************
- * @brief  Writes and reads back a test byte to verify FRAM communication.
+ * @brief  Reads part ID to verify init communication
  *
- * @note   Writes 0xA5 to address 0x000010 and reads it back. Logs OK or FAIL
- *         with both the written and read values via Log() (debug UART4).
+ * @param  id_buf   uint8_t to save id
+ * 		   len		uint8_t to save id length
+ *
+ * @retval uint8_t   0 if ok, 1 if error
  ********************************************************************************/
-void TestFRAM(void);
+uint8_t FRAM_ReadDeviceID(uint8_t *id_buf, uint8_t len);
+
+
+/********************************************************************************
+ * @brief  Reads device ID and compares with expected value. If it doesn't match,
+ * 		   throws error
+ *
+ ********************************************************************************/
+uint8_t TestFRAM(void);
 
 
 /********************************************************************************
@@ -79,8 +96,9 @@ void SaveBoardStatusFRAM(void);
 void LoadBoardStatusFRAM(void);
 
 
-// Will flag FRAM to be erased next boot and initialized to zero
-void EraseFRAMOnNextBoot(void);
+// Erases FRAM writable space and initializes to zero. Also points the compression_ptr to PHOTO_DATA_START
+// Doesn't touch FW backup space
+void EraseFRAM(void);
 
 /********************************************************************************
  * @brief  Save a buffer from SRAM into FRAM using a single burst write.

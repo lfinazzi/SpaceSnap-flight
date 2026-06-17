@@ -1,6 +1,7 @@
 #include "fram.h"
 
 extern SPI_HandleTypeDef hspi2;
+extern IWDG_HandleTypeDef hiwdg;
 
 void FRAM_WriteByte(uint32_t addr, uint8_t data)
 {
@@ -40,75 +41,102 @@ uint8_t FRAM_ReadByte(uint32_t addr)
     return rxdata;
 }
 
-void TestFRAM(void)
+uint8_t FRAM_ReadDeviceID(uint8_t *id_buf, uint8_t len)
 {
-	char log_buf[64];
-	uint8_t ok = 1;
+    uint8_t cmd[2] = {0x9F, 0x00};  // opcode + dummy byte
 
-	uint32_t addrs[3] = {0x000000, 0x080000, 0x0FFFFF};  // start, mid, end of 1MB
-	uint8_t  vals[3]  = {0xA5,     0x5A,     0xF0    };
+    FRAM_CS_LOW();
+    HAL_StatusTypeDef s1 = HAL_SPI_Transmit(&hspi2, cmd, 2, HAL_MAX_DELAY);
+    HAL_StatusTypeDef s2 = HAL_SPI_Receive(&hspi2, id_buf, len, HAL_MAX_DELAY);
+    FRAM_CS_HIGH();
 
-	for(int i = 0; i < 3; i++)
-		FRAM_WriteByte(addrs[i], vals[i]);
+    return (s1 == HAL_OK && s2 == HAL_OK) ? 0 : 1;
+}
 
-	for(int i = 0; i < 3; i++)
-	{
-		uint8_t r = FRAM_ReadByte(addrs[i]);
-		if(r != vals[i])
-		{
-			sprintf(log_buf, "FRAM FAIL at 0x%06lX: wrote 0x%02X read 0x%02X\r\n",
-					addrs[i], vals[i], r);
-			Log(log_buf);
-			ok = 0;
-			board_status.fram_ok = 0;		// FRAM init not ok
-		}
-	}
+uint8_t TestFRAM(void)
+{
+    uint8_t id_buf[4] = {0};
+    uint8_t expected_id[4] = {0x51, 0x82, 0x06, 0x00};
+    char log_buf[40];
 
-	if(ok){
-		Log("FRAM OK: start/mid/end passed\r\n");
-		board_status.fram_ok = 1;		// FRAM init ok
-	}
+    FRAM_ReadDeviceID(id_buf, 4);
+
+    sprintf(log_buf, "FRAM ID: %02X %02X %02X %02X\r\n",
+            id_buf[0], id_buf[1], id_buf[2], id_buf[3]);
+    Log(log_buf);
+
+    if (memcmp(id_buf, expected_id, 4) == 0) {
+        Log("FRAM OK: start successful\r\n");
+        return 1;
+    } else {
+        Log("FRAM ERROR: init failed\r\n");
+        return 0;
+    }
+    return 0;
 }
 
 void SaveBoardStatusFRAM(void)
 {
     uint8_t *p = (uint8_t *)&board_status;
 
-    for(uint32_t i = 0; i < PHOTO_DATA_START; i++)
+    for(uint32_t i = 0; i < sizeof(board_status_t); i++)
     {
-        FRAM_WriteByte(0x0 + i, p[i]);
+        FRAM_WriteByte(BOARD_STATUS_START + i, p[i]);			// Saves board status to FRAM
     }
+
+    uint8_t *pc = (uint8_t *)&compression_table;
+
+	for(uint32_t i = 0; i < sizeof(compression_index_entry_t)*MAX_COMPRESSED_PHOTOS; i++)
+	{
+		FRAM_WriteByte(COMPRESSION_TABLE_START + i, pc[i]);		// Saves compression table to FRAM
+	}
 }
 
 
 void LoadBoardStatusFRAM(void)
 {
-	// Check if FRAM has been initialized before (or first boot)
-	if(FRAM_ReadByte(FRAM_MAGIC_ADDR) != FRAM_MAGIC_VAL)			// Tries to read a m
+	uint8_t ret = TestFRAM();
+
+	if(ret == 0)	// failed
 	{
-		// First boot — zero out struct and save
-		Log("First boot detected, initializing FRAM...\r\n");
-		memset(&board_status, 0, PHOTO_DATA_START);
-		board_status.compression_ptr_address = PHOTO_DATA_START;
-		FRAM_WriteByte(FRAM_MAGIC_ADDR, FRAM_MAGIC_VAL);			// writes a value in last position to flag that this is not first boot
+        board_status.fram_ok = 0;
+		/* continue */
 	}
-	else
-	{
+	else {			// success
 		// Normal boot — load saved state
 		uint8_t *p = (uint8_t *)&board_status;
-		for(uint32_t i = 0; i < PHOTO_DATA_START; i++)
-			p[i] = FRAM_ReadByte(0x00 + i);
+		for(uint32_t i = 0; i < sizeof(board_status_t); i++)
+			p[i] = FRAM_ReadByte(BOARD_STATUS_START + i);
+
+		uint8_t *pc = (uint8_t *)&compression_table;
+		for(uint32_t i = 0; i < sizeof(compression_index_entry_t)*MAX_COMPRESSED_PHOTOS; i++)
+			pc[i] = FRAM_ReadByte(COMPRESSION_TABLE_START + i);
+
+		// Increment boot count and save back
+        board_status.fram_ok = 1;
 	}
 
-    // Increment boot count and save back
-    board_status.boot_count++;
-
+	board_status.boot_count++;
     SaveBoardStatusFRAM();
 }
 
-void EraseFRAMOnNextBoot(void)
+// might take a while
+void EraseFRAM(void)
 {
-	FRAM_WriteByte(FRAM_MAGIC_ADDR, 0x00);
+	Log("Start of FRAM erase... might take a while (approx. 40 s)\r\n");		// Takes approximately 40 s
+	// From 0 to start of FW backup, might take a while
+	for (uint32_t addr = 0x00; addr < FIRMWARE_BACKUP_START; addr++) {
+		FRAM_WriteByte(addr, 0x00);
+		HAL_IWDG_Refresh(&hiwdg);		// kick IWDG to avoid reset
+
+	}
+
+	memset(&board_status, 0, sizeof(board_status_t));													// reset board status
+	memset(&compression_table, 0, sizeof(compression_index_entry_t)*MAX_COMPRESSED_PHOTOS);				// reset compression table
+	board_status.compression_ptr_address = PHOTO_DATA_START;		// point compression_ptr to the correct address (first address)
+	board_status.fram_bytes_left = FIRMWARE_BACKUP_START - board_status.compression_ptr_address;		// All bytes available
+
+	Log("FRAM erase complete\r\n");
 	return;
 }
 
@@ -127,7 +155,7 @@ void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
 {
     uint8_t cmd[4];
 
-    if (fram_address + size > 0x200000) {
+    if (fram_address + size > FIRMWARE_BACKUP_START) {		// Would overflow allowed region for compressed photo data
         return;  // would wrap past 16Mb boundary
     }
 

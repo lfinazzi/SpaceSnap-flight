@@ -20,6 +20,8 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_dma.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_dma_ex.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_cortex.h \
+ ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_adc.h \
+ ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_adc_ex.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_dcmi.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_flash.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_flash_ex.h \
@@ -35,7 +37,7 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h \
  ../Core/Inc/sram.h ../Core/Inc/photo.h ../Core/Inc/comms.h \
  ../Core/Inc/status.h ../Core/Inc/irq.h ../Core/Inc/gpio.h \
- ../Core/Inc/comms.h ../Core/Inc/main.h
+ ../Core/Inc/telemetry.h ../Core/Inc/comms.h ../Core/Inc/main.h
 ../Core/Inc/status.h:
 ../Core/Inc/command.h:
 ../Core/Inc/fram.h:
@@ -60,6 +62,8 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_dma.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_dma_ex.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_cortex.h:
+../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_adc.h:
+../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_adc_ex.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_dcmi.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_flash.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_flash_ex.h:
@@ -79,5 +83,6 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
 ../Core/Inc/status.h:
 ../Core/Inc/irq.h:
 ../Core/Inc/gpio.h:
+../Core/Inc/telemetry.h:
 ../Core/Inc/comms.h:
 ../Core/Inc/main.h:

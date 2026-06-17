@@ -85,7 +85,7 @@ main-build: USS.elf secondary-outputs
 
 # Tool invocations
 USS.elf USS.map: $(OBJS) $(USER_OBJS) C:\Users\Us\Documents\UNSAMSat\USS\STM32F217ZGTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-g++ -o "USS.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\Us\Documents\UNSAMSat\USS\STM32F217ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="USS.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
+	arm-none-eabi-g++ -o "USS.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\Us\Documents\UNSAMSat\USS\STM32F217ZGTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="USS.map" -Wl,--gc-sections -static -u _printf_float --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

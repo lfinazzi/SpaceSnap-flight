@@ -16,6 +16,8 @@ void TestSRAM(void)
 
 	const uint32_t len = (uint32_t)(end - start);   /* in 32-bit words */
 
+	board_status.sram_ok = 0;   // explicit, don't rely on prior state
+
 	/* --- Pass 1: walking ones ---------------------------------------- */
 	static const uint32_t patterns[] = {
 		0xAAAAAAAAU,
@@ -44,7 +46,7 @@ void TestSRAM(void)
 	return;
 }
 
-/* OLD VERSION, DUMPED IN HEX
+// Dumped in hex, for fast debug
 void DumpRawBuffer(uint8_t slot, uint32_t num_bytes)
 {
     char log_buf[128];
@@ -79,8 +81,9 @@ void DumpRawBuffer(uint8_t slot, uint32_t num_bytes)
 
     Log("--- END DUMP ---\r\n");
 }
-*/
 
+
+/*
 void DumpRawBuffer(uint8_t slot, uint32_t num_bytes)
 {
     char log_buf[64];
@@ -104,8 +107,9 @@ void DumpRawBuffer(uint8_t slot, uint32_t num_bytes)
 
     Log("\r\n--- END DUMP ---\r\n");
 }
+*/
 
-/* OLD VERSION, DUMPED IN HEX
+// Dumped in hex, for fast debug
 void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes)
 {
     char log_buf[128];
@@ -140,8 +144,8 @@ void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes)
 
     Log("--- END DUMP ---\r\n");
 }
-*/
 
+/*
 void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes)
 {
     char log_buf[64];
@@ -164,7 +168,7 @@ void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes)
     }
 
     Log("\r\n--- END DUMP ---\r\n");
-}
+}*/
 
 void ResetVolatileStatus(void)
 {

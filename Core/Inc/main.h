@@ -39,6 +39,7 @@ extern "C" {
 #include "status.h"
 #include "irq.h"
 #include "gpio.h"
+#include "telemetry.h"
 
 #include <string.h>
 #include <stdio.h>
