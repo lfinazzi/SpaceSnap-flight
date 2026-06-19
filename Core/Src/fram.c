@@ -123,7 +123,7 @@ void LoadBoardStatusFRAM(void)
 // might take a while
 void EraseFRAM(void)
 {
-	Log("Start of FRAM erase... might take a while (approx. 40 s)\r\n");		// Takes approximately 40 s
+	Log("Erasing FRAM writable space... might take a while (approx. 40 s)\r\n");
 	// From 0 to start of FW backup, might take a while
 	for (uint32_t addr = 0x00; addr < FIRMWARE_BACKUP_START; addr++) {
 		FRAM_WriteByte(addr, 0x00);
@@ -191,4 +191,23 @@ void ReadBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
     HAL_SPI_Transmit(&hspi2, cmd, 4, HAL_MAX_DELAY);
     HAL_SPI_Receive(&hspi2, buffer, size, HAL_MAX_DELAY);
     FRAM_CS_HIGH();
+}
+
+void EraseCompressions(void)
+{
+	Log("Erasing compressions in memory... might take a while (approx. 40 s)\r\n");		// Takes approximately 40 s
+	// From PHOTO_DATA_START to start of FW backup, might take a while
+	for (uint32_t addr = PHOTO_DATA_START; addr < FIRMWARE_BACKUP_START; addr++) {
+		FRAM_WriteByte(addr, 0x00);
+		HAL_IWDG_Refresh(&hiwdg);		// kick IWDG to avoid reset
+
+	}
+
+	memset(&compression_table, 0, sizeof(compression_index_entry_t)*MAX_COMPRESSED_PHOTOS);				// reset compression table
+	board_status.compression_ptr_address = PHOTO_DATA_START;		// point compression_ptr to the correct address (first address)
+	board_status.fram_bytes_left = FIRMWARE_BACKUP_START - board_status.compression_ptr_address;		// All bytes available
+	board_status.compression_count = 0;		// no more compressions in memory
+
+	Log("Compressions erased\r\n");
+	return;
 }

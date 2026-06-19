@@ -56,6 +56,7 @@ typedef char static_assert_compressed_photo_t_size[	// Static assert that a comp
     (sizeof(compressed_photo_t) == 614428) ? 1 : -1
 ];
 
+
 /********************************************************************************
  * @brief  Asserts the shared camera reset line (RESET_BAR) LOW.
  *
@@ -67,6 +68,7 @@ typedef char static_assert_compressed_photo_t_size[	// Static assert that a comp
  *         clean power sequencing and avoid ESD structure forward-biasing.
  ********************************************************************************/
 void CAM_ResetAssert(void);
+
 
 /********************************************************************************
  * @brief  Releases the shared camera reset line (RESET_BAR) HIGH.
@@ -83,74 +85,75 @@ void CAM_ResetAssert(void);
  ********************************************************************************/
 void CAM_ResetRelease(void);
 
+
 /********************************************************************************
  * @brief  Full power-up and initialisation sequence for Camera A.
  *
  * @note   Performs the following sequence in order:
- *           1. Asserts RESET_BAR LOW (shared with Camera B).
- *           2. Enables the 2.8V power rail via IMG_ENA_A (PA2), which supplies
- *              VAA, VAA_PIX, VDD_IO, VDD_DAC and VDD_PLL. Waits 10ms for
- *              rails to stabilise.
- *           3. Enables the I2C level shifter via IMG_ENA (PA12) then
- *              IMG_I2C_ENA (PA11).
- *           4. Releases RESET_BAR, starting the sensor boot sequence and
+ *           1. Enables IMG_ENA (PA12) to power the level shifter supply rail.
+ *           2. Starts EXTCLK (27 MHz via TIM11 CH1 PWM). EXTCLK must be
+ *              running before the sensor power rails come up.
+ *           3. Asserts RESET_BAR LOW (shared with Camera B).
+ *           4. Enables the 2.8V power rail via IMG_ENA_A (PA2). Waits 10ms
+ *              for rails to stabilise.
+ *           5. Enables the I2C level shifter via IMG_I2C_ENA (PA11).
+ *           6. Releases RESET_BAR, starting the sensor boot sequence and
  *              enabling the internal BSR16-based 1.8V VDD regulator.
- *           5. Waits 150ms for the 1.8V rail to stabilise and the sensor
+ *           7. Waits 150ms for the 1.8V rail to stabilise and the sensor
  *              firmware to complete boot in Host Config Mode.
- *         After this call returns, the sensor is ready for I2C register access.
- *         EXTCLK (27 MHz via TIM11 CH1) must be running before this call.
- *         Camera B must not be active simultaneously due to shared RESET_BAR
- *         and shared I2C bus address (0x48).
+ *         After this call returns, the sensor is ready for I2C register
+ *         access. Camera B must not be active simultaneously due to shared
+ *         RESET_BAR and shared I2C bus address (0x48).
  ********************************************************************************/
 void ActivateCAMA(void);
+
 
 /********************************************************************************
  * @brief  Full power-up and initialisation sequence for Camera B.
  *
  * @note   Identical sequence to ActivateCAMA() but uses IMG_ENA_B (PA3) to
  *         enable the Camera B 2.8V power rail instead of IMG_ENA_A (PA2).
- *         All other signals (RESET_BAR, IMG_I2C_ENA, IMG_ENA) are shared with
- *         Camera A. Camera A must be fully deactivated before calling this
- *         function to avoid I2C address conflicts and undefined behaviour on
- *         the shared RESET_BAR line.
+ *         All other signals (RESET_BAR, IMG_I2C_ENA, IMG_ENA, EXTCLK) are
+ *         shared with Camera A. Camera A must be fully deactivated before
+ *         calling this function to avoid I2C address conflicts and undefined
+ *         behaviour on the shared RESET_BAR line.
  *         After this call returns, the sensor is ready for I2C register access.
- *         EXTCLK (27 MHz via TIM11 CH1) must be running before this call.
  ********************************************************************************/
 void ActivateCAMB(void);
+
 
 /********************************************************************************
  * @brief  Full power-down sequence for Camera A.
  *
  * @note   Performs the following sequence in order:
  *           1. Asserts RESET_BAR LOW, stopping sensor firmware and halting
- *              VREG_BASE drive. The BSR16 begins turning off and the 1.8V VDD
- *              rail starts to collapse. Waits 5ms to allow 1.8V to begin
- *              collapsing before the 2.8V rail is removed, preventing reverse
- *              biasing of internal ESD protection structures.
- *           2. Disables the I2C level shifter via IMG_I2C_ENA (PA11) then
- *              IMG_ENA (PA12), isolating the I2C bus before the 2.8V rail
- *              collapses to prevent spurious bus transactions from floating
- *              lines.
- *           3. Disables the 2.8V rail via IMG_ENA_A (PA2).
- *           4. Waits 100ms for the 4.7uF reservoir capacitor on the 1.8V node
- *              and bulk capacitors on the 2.8V rail to fully discharge before
+ *              VREG_BASE drive. Waits 1ms.
+ *           2. Disables the I2C level shifter via IMG_I2C_ENA (PA11).
+ *              Waits 1ms.
+ *           3. Disables the 2.8V rail via IMG_ENA_A (PA2). Waits 1ms.
+ *           4. Stops EXTCLK (TIM11 CH1 PWM).
+ *           5. Waits 100ms for bulk capacitors on the 2.8V rail and the
+ *              4.7uF reservoir on the 1.8V node to fully discharge before
  *              any re-enable attempt.
+ *           6. Disables IMG_ENA (PA12).
  *         Safe to call even if ActivateCAMA() was not previously called.
  ********************************************************************************/
 void DeactivateCAMA(void);
+
 
 /********************************************************************************
  * @brief  Full power-down sequence for Camera B.
  *
  * @note   Identical sequence to DeactivateCAMA() but disables the Camera B
  *         2.8V rail via IMG_ENA_B (PA3) instead of IMG_ENA_A (PA2).
- *         RESET_BAR, IMG_I2C_ENA and IMG_ENA are shared with Camera A and
- *         will be affected by this call regardless of which camera was active.
- *         After this call returns, both cameras are unpowered and RESET_BAR
- *         is asserted. A minimum of 100ms must elapse before re-enabling
- *         either camera to ensure full rail discharge.
+ *         RESET_BAR, IMG_I2C_ENA, IMG_ENA, and EXTCLK are shared with
+ *         Camera A and will be affected by this call regardless of which
+ *         camera was active. After this call returns, both cameras are
+ *         unpowered and RESET_BAR is asserted. A minimum of 100ms must
+ *         elapse before re-enabling either camera.
  ********************************************************************************/
 void DeactivateCAMB(void);
+
 
 /********************************************************************************
  * @brief  Polls the Host Command Interface doorbell bit until the firmware
@@ -171,13 +174,25 @@ void DeactivateCAMB(void);
  ********************************************************************************/
 HAL_StatusTypeDef CAM_WaitDoorbell(uint8_t i2c_addr);
 
-/* ─────────────────────────────────────────────────────────────────────────────
- * Internal helper: issue a Change-Config command and poll until complete.
- * Change-Config is required after writing frame-start-synchronized variables
- * (scan mode, orientation, port configuration, AE/AWB parameters).
- * The SOC applies the new settings on the next frame boundary.
- * ───────────────────────────────────────────────────────────────────────────── */
+
+/********************************************************************************
+ * @brief  Issues a Change-Config command to the sensor and polls until the
+ *         firmware acknowledges completion via the doorbell mechanism.
+ *
+ * @note   Required after writing any frame-start-synchronized variable
+ *         (scan mode, orientation, port configuration, AE/AWB parameters).
+ *         Writes 0x2800 to the parameter pool (0xFC00) and 0x8100 to the
+ *         command register (0x0040), then calls CAM_WaitDoorbell(). The SOC
+ *         applies the new settings on the next frame boundary.
+ *
+ * @param  i2c_addr  8-bit shifted I2C address of the target sensor.
+ *                   Use CAM_I2C_ADDR_A or CAM_I2C_ADDR_B.
+ *
+ * @return HAL_OK on success.
+ *         HAL_TIMEOUT if the doorbell did not clear within 200ms.
+ ********************************************************************************/
 HAL_StatusTypeDef CAM_ChangeConfig(uint8_t i2c_addr);
+
 
 /********************************************************************************
  * @brief  Queries the current system state of the camera via the Host
@@ -202,6 +217,7 @@ HAL_StatusTypeDef CAM_ChangeConfig(uint8_t i2c_addr);
  *                    0xFFFF if doorbell timed out.
  ********************************************************************************/
 uint16_t CAM_GetState(uint8_t i2c_addr);
+
 
 /********************************************************************************
  * @brief  Writes a 16-bit value to a 16-bit addressed register on the
@@ -234,10 +250,14 @@ HAL_StatusTypeDef CAM_WriteReg(uint8_t i2c_addr, uint16_t reg, uint16_t val);
  *         access within photo.c should go through this function.
  *         The ASX340AT register bus uses 16-bit addresses and 16-bit data.
  *         The response is read big-endian (MSB first) and reassembled into
- *         a uint16_t. Uses hi2c2 with a 100ms timeout.
+ *         a uint16_t. Uses hi2c2 with CAM_I2C_TIMEOUT timeout.
  *         Do not call this function before ActivateCAMA() or ActivateCAMB()
  *         has returned, as the I2C level shifter will not be enabled.
- *         On I2C failure the value at *val is not modified.
+ *
+ *         NOTE: *val is always written after the I2C transaction, even on
+ *         HAL_ERROR. On failure *val will contain whatever bytes were
+ *         partially received into the internal buffer (likely 0x0000).
+ *         Callers should check the return value before using *val.
  *
  * @param  i2c_addr   8-bit shifted I2C address of the target sensor.
  *                    Use CAM_I2C_ADDR_A (0xBA) or CAM_I2C_ADDR_B (0x90).
@@ -245,43 +265,53 @@ HAL_StatusTypeDef CAM_WriteReg(uint8_t i2c_addr, uint16_t reg, uint16_t val);
  * @param  val        Pointer to uint16_t where the result will be stored.
  *
  * @retval HAL_OK     Register read completed successfully, *val is valid.
- * @retval HAL_ERROR  I2C transaction failed (bus error, NACK, timeout).
- *                    *val is unchanged.
+ * @retval HAL_ERROR  I2C transaction failed. *val contains partial/zero data.
  ********************************************************************************/
 HAL_StatusTypeDef CAM_ReadReg(uint8_t i2c_addr, uint16_t reg, uint16_t *val);
 
+
 /********************************************************************************
- * @brief  Initialises the camera sensor for Raw Bayer progressive output
- *         on the parallel digital port.
+ * @brief  Initialises the ASX340AT camera sensor for YCbCr 4:2:2 progressive
+ *         output on the parallel digital port.
  *
- * @note   Configures the following in two Change-Config stages:
+ * @note   Configures the sensor in two active Change-Config stages:
  *
- *         Stage 1 — NTSC progressive parallel preset:
- *           Writes 0x9426 = 0x0025 to enable VGA progressive output on the
- *           parallel port using the NTSC driver preset. A Change-Config is
- *           issued to apply this before proceeding.
+ *         Stage 1 — Scan mode, orientation, and flicker avoidance:
+ *           0x9826 = 0x0025  PAL progressive preset for VGA parallel output
+ *           0xC858 = 0x0009  VGA50 progressive scan (50fps, EU mains)
+ *           0xC838 = 0x0000  No image flip or mirror (override Auto-Config
+ *                            floating GPIO sampling)
+ *           0xC881 = 0x0032  50Hz flicker avoidance (EU/ARG mains)
  *
- *         Stage 2 — Output format and parallel port control:
- *           0xC96C = 0x0200  Raw Bayer output format (bits[9:8] = 10)
- *           0xC972 = 0x0005  Parallel port enabled, progressive mode,
-  *                           continuous PIXCLK (bit[4]=0, bit[2:1]=10, bit[0]=1)
- *           A second Change-Config is issued to apply these settings.
+ *         Stage 2 — Output format, parallel port, FOV alignment:
+ *           0xC96C = 0x0000  YCbCr 4:2:2 UYVY output format
+ *           0xC972 = 0x0005  Parallel port enabled, progressive, continuous
+ *                            PIXCLK (required for STM32 DCMI hardware sync)
+ *           0x001E = 0x0200  Pad slew rate control (takes effect immediately,
+ *                            no Change-Config required)
+ *           0xC85E = 0x02D0  720 active pixels
+ *           0xC860 = 0x0000  Zero pixel offset
  *
- *         Register addresses 0xC96C and 0xC972 are CamControl variables
- *         confirmed in the ASX340AT Developer Guide.
- *         Register 0x9426 is the NTSC driver variable confirmed in the
- *         ASX340AT Developer Guide.
+ *         After Stage 2, performs a full register readback verification and
+ *         logs AWB runtime gains (0xAC12, 0xAC14) and color temperature
+ *         (0xC8E6) as diagnostics. Waits 500ms for AE/AWB convergence before
+ *         returning.
  *
- *         This function must be called after ActivateCAMx() has completed
- *         and the sensor has finished its boot sequence.
+ *         Stages 3 (AE configuration) and 4 (AWB state reset) are currently
+ *         commented out pending testing.
  *
- * @param  i2c_addr   7-bit I2C address shifted left by 1 (HAL format).
- *                    Use CAM_I2C_ADDR_A or CAM_I2C_ADDR_B.
+ *         Must be called after ActivateCAMx() has completed. Returns HAL_ERROR
+ *         immediately if the device ID readback does not match 0x2285.
  *
- * @retval HAL_OK       Configuration applied successfully.
- * @retval HAL_TIMEOUT  Doorbell did not clear within 200ms on either stage.
+ * @param  i2c_addr   8-bit shifted I2C address of the target sensor.
+ *                    Use CAM_I2C_ADDR_A (0xBA) or CAM_I2C_ADDR_B (0x90).
+ *
+ * @return HAL_OK on success.
+ *         HAL_ERROR if device ID mismatch on entry.
+ *         HAL_TIMEOUT if any Change-Config doorbell poll times out.
  ********************************************************************************/
 HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr);
+
 
 /********************************************************************************
  * @brief  Captures a single raw frame from the active camera into an SRAM
@@ -289,47 +319,70 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr);
  *
  * @note   Writes the frame header (designator, opcode, timestamp) to the
  *         target raw_photo_t struct in SRAM before starting the DMA transfer.
- *         Then calls HAL_DCMI_Start_DMA() in DCMI_MODE_SNAPSHOT pointing
- *         directly at the data[] field of the target struct. The DCMI waits
- *         for the next VSYNC edge from the sensor before capturing exactly
- *         one frame. DMA transfers 32-bit words directly to FSMC SRAM.
+ *         Timestamp is computed as board_status.uptime_total +
+ *         (uptime_session / 1000) seconds, split across timestamp_MSB and
+ *         timestamp_LSB fields.
  *
- *         Completion is signalled by HAL_DCMI_FrameEventCallback() setting
- *         dcmi_frame_ready = 1. This function polls that flag with a 500ms
- *         timeout, kicking the IWDG on each iteration. On timeout or DMA
- *         error, HAL_DCMI_Stop() is called and the function returns an
- *         error code.
+ *         Starts DMA manually via HAL_DMA_Start_IT() before calling
+ *         HAL_DCMI_Start_DMA() in DCMI_MODE_SNAPSHOT. Resets DCMI handle
+ *         state (HAL_DCMI_Stop + hdcmi.State = READY) before each capture
+ *         to allow repeated captures without re-initializing the peripheral.
+ *         Polls dcmi_frame_ready and dcmi_error flags with DCMI_TIMEOUT ms
+ *         timeout, kicking the IWDG on each iteration. On timeout, logs DCMI
+ *         and DMA status registers for diagnostics before returning HAL_TIMEOUT.
  *
- *         The sensor must be powered, configured and streaming before calling
- *         this function. ASX340AT_Init() must have completed successfully.
- *         DCMI and DMA2 must be initialised (MX_DMA_Init, MX_DCMI_Init).
+ *         TODO: black_pixels_LSB and black_pixels_MSB are always written as
+ *         0x0000. Black pixel counting is not yet implemented.
  *
- * @param  slot        Raw buffer slot index (0, 1 or 2). Selects the target
- *                     address via RAW_BUFFER(slot). Must be < RAW_PHOTO_COUNT.
+ *         The sensor must be powered, configured and streaming (CAM_Init()
+ *         completed successfully) before calling this function.
+ *
+ * @param  slot        Raw buffer slot index (0 to RAW_PHOTO_COUNT-1).
  * @param  designator  Global photo sequence number written into the header.
  * @param  opcode      Pointer to OPCODE_SIZE bytes written into the header.
  *
- * @retval HAL_OK      Frame captured successfully. raw_photo_t at
- *                     RAW_BUFFER(slot) contains valid header and pixel data.
- * @retval HAL_ERROR   Invalid slot, DCMI failed to start, or DMA error
- *                     reported by HAL_DCMI_ErrorCallback().
- * @retval HAL_TIMEOUT Frame not completed within 500ms. Sensor may not be
- *                     streaming or VSYNC signal absent.
+ * @return HAL_OK on success.
+ *         HAL_ERROR if slot is invalid or DCMI failed to start.
+ *         HAL_TIMEOUT if frame not completed within DCMI_TIMEOUT ms.
  ********************************************************************************/
 HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot, uint16_t designator, uint8_t  *opcode);
 
+
 /********************************************************************************
- * @brief  Function to initialize changable CAM params default values
+ * @brief  Initializes cam_params global struct with default values.
  *
+ * @note   TODO: Default values are untested. ae_rule_algo_val is set to 0x0003
+ *         (Adaptive for lowlights) but the AE algorithm configuration in
+ *         CAM_Init() Stage 3 is currently commented out, so this value has
+ *         no effect on sensor behavior until Stage 3 is enabled.
  ********************************************************************************/
 void InitCamParams(void);
 
+
 /********************************************************************************
- * @brief  Function to compress photo in raw buffer and save to SRAM + FRAM
+ * @brief  Compresses a raw YCbCr 4:2:2 photo from SRAM into JPEG and stores
+ *         the result in the SRAM compression buffer.
  *
- *	returns 0 if compression failed and 1 if it was successful
+ * @note   Reads raw pixel data from RAW_BUFFER(buffer) and writes the
+ *         compressed JPEG into COMPRESSED_BUFFER(0) (only one compression
+ *         buffer exists). Copies header metadata (index, designator, opcode,
+ *         quality, timestamp, black_pixels) from the raw buffer into the
+ *         compressed_photo_t header before encoding.
  *
- * TODO: Comment pending
+ *         Uses tje_encode_to_memory() (TinyJPEG library) for encoding.
+ *         Quality levels: 1 = noticeable (~1/6 size of quality 3),
+ *                         2 = very good  (~1/2 size of quality 3),
+ *                         3 = highest    (compression ratio varies 1/3–1/20).
+ *         Output size is stored in compression->size_MSB and size_LSB.
+ *
+ *         black_pixels MSB/LSB are copied from the raw buffer as-is.
+ *         If no black filtering was performed they will be 0x0000.
+ *
+ * @param  buffer   Raw buffer slot index to compress (0 to RAW_PHOTO_COUNT-1).
+ * @param  quality  Compression quality level: 1 (lowest) to 3 (highest).
+ *
+ * @return 1 on success.
+ *         0 if tje_encode_to_memory() failed.
  ********************************************************************************/
 uint8_t CompressRawPhoto(uint8_t buffer, int quality);
 

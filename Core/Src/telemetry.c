@@ -4,6 +4,7 @@
 extern board_status_t board_status;
 extern ADC_HandleTypeDef hadc1;
 
+
 void CheckResetCause(void)
 {
     if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST)) {
@@ -40,11 +41,9 @@ void CheckResetCause(void)
     __HAL_RCC_CLEAR_RESET_FLAGS();
 }
 
-// TODO: comment
 void Read_MCU_ADC_Vals(void)
 {
-
-    // Read VREFINT first (rank 1)
+	// Start ADC1 scan sequence
     HAL_ADC_Start(&hadc1);
 
     // Read temp sensor (rank 1)

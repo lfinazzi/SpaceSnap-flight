@@ -878,6 +878,31 @@ static void tjei_memory_func(void* context, void* data, int size)
 
 // ── Public entry points ───────────────────────────────────────────────────────
 
+
+/********************************************************************************
+ * @brief  Encodes a raw image into a baseline DCT JPEG bitstream, writing
+ *         output via a caller-supplied write callback.
+ *
+ * @note   Internal entry point used by tje_encode_to_memory(). Initializes
+ *         TJEState, selects quantization tables based on quality level, sets
+ *         up the write context, expands Huffman tables, and calls
+ *         tjei_encode_main(). Quality 3 uses flat QT (all 1s, maximum
+ *         quality). Quality 2 divides default QT values by 10. Quality 1
+ *         uses the full default QT values (most compression, lowest quality).
+ *
+ * @param  func            Write callback invoked whenever the internal output
+ *                         buffer is full or flushed.
+ * @param  context         Opaque pointer passed to func on each call.
+ * @param  quality         Compression quality: 1 (lowest) to 3 (highest).
+ * @param  width           Image width in pixels.
+ * @param  height          Image height in pixels.
+ * @param  num_components  Must be 3 (YCbCr). 4 is accepted by tjei_encode_main
+ *                         but not tested on this target.
+ * @param  src_data        Pointer to UYVY source pixel data [Cb Y0 Cr Y1],
+ *                         row-major.
+ *
+ * @return 1 on success, 0 if quality is out of range [1..3].
+ ********************************************************************************/
 static int tje_encode_with_func(tje_write_func*      func,
                                 void*                context,
                                 const int            quality,
@@ -919,6 +944,34 @@ static int tje_encode_with_func(tje_write_func*      func,
     return tjei_encode_main(&state, src_data, width, height, num_components);
 }
 
+
+/********************************************************************************
+ * @brief  Encodes a raw UYVY image into a baseline DCT JPEG and writes the
+ *         output into a caller-supplied memory buffer.
+ *
+ * @note   Wraps tje_encode_with_func() using tjei_memory_func as the write
+ *         callback, which writes exclusively via 16-bit aligned word stores
+ *         to support NOR SRAM on STM32 FSMC (byte writes to odd addresses
+ *         are unreliable on 16-bit NOR SRAM and would silently corrupt data).
+ *         Each logical JPEG byte occupies one uint16_t slot in the destination
+ *         buffer, so the effective storage cost is 2 bytes per JPEG byte.
+ *         Returns 0 immediately if memory_buffer or bytes_written is NULL.
+ *
+ * @param  memory_buffer   Pointer to destination buffer in NOR SRAM
+ *                         (compressed_photo_t->data[]). Must be 16-bit aligned.
+ * @param  buffer_size     Size of memory_buffer in bytes (sizeof(data[])).
+ *                         Writes beyond this limit are silently dropped.
+ * @param  bytes_written   Receives the number of logical JPEG bytes written
+ *                         on success. Actual SRAM consumed is 2x this value.
+ * @param  quality         Compression quality: 1 (lowest) to 3 (highest).
+ * @param  width           Image width in pixels.
+ * @param  height          Image height in pixels.
+ * @param  num_components  Must be 3.
+ * @param  src_data        Pointer to UYVY source pixel data [Cb Y0 Cr Y1],
+ *                         row-major, from raw_photo_t->data[].
+ *
+ * @return 1 on success, 0 on error (NULL pointers or quality out of range).
+ ********************************************************************************/
 int tje_encode_to_memory(uint8_t*             memory_buffer,
                          uint32_t             buffer_size,
                          uint32_t*            bytes_written,

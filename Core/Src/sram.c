@@ -5,7 +5,6 @@
 #include <stddef.h>
 #include <stdio.h>
 
-
 extern IWDG_HandleTypeDef hiwdg;
 extern UART_HandleTypeDef huart4;
 
@@ -82,33 +81,6 @@ void DumpRawBuffer(uint8_t slot, uint32_t num_bytes)
     Log("--- END DUMP ---\r\n");
 }
 
-
-/*
-void DumpRawBuffer(uint8_t slot, uint32_t num_bytes)
-{
-    char log_buf[64];
-    volatile raw_photo_t *buf = RAW_BUFFER(slot);
-    uint8_t *data = (uint8_t *)&buf->data[0];
-
-    sprintf(log_buf, "--- RAW BUFFER %d DUMP (%lu bytes) ---\r\n", slot, num_bytes);
-    Log(log_buf);
-
-    uint32_t offset = 0;
-    while (offset < num_bytes)
-    {
-        uint32_t chunk = ((num_bytes - offset) < 256) ? (num_bytes - offset) : 256;
-
-        HAL_UART_Transmit(&huart4, data + offset, chunk, HAL_MAX_DELAY);
-        HAL_IWDG_Refresh(&hiwdg);
-        HAL_Delay(2);
-
-        offset += chunk;
-    }
-
-    Log("\r\n--- END DUMP ---\r\n");
-}
-*/
-
 // Dumped in hex, for fast debug
 void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes)
 {
@@ -145,31 +117,6 @@ void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes)
     Log("--- END DUMP ---\r\n");
 }
 
-/*
-void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes)
-{
-    char log_buf[64];
-    volatile compressed_photo_t *buf = COMPRESSED_BUFFER(slot);
-    uint8_t *data = (uint8_t *)&buf->data[0];
-
-    sprintf(log_buf, "--- COMPRESSED BUFFER %d DUMP (%lu bytes) ---\r\n", slot, num_bytes);
-    Log(log_buf);
-
-    uint32_t offset = 0;
-    while (offset < num_bytes)
-    {
-        uint32_t chunk = ((num_bytes - offset) < 256) ? (num_bytes - offset) : 256;
-
-        HAL_UART_Transmit(&huart4, data + offset, chunk, HAL_MAX_DELAY);
-        HAL_IWDG_Refresh(&hiwdg);
-        HAL_Delay(2);
-
-        offset += chunk;
-    }
-
-    Log("\r\n--- END DUMP ---\r\n");
-}*/
-
 void ResetVolatileStatus(void)
 {
 	// All buffers unoccupied
@@ -178,6 +125,7 @@ void ResetVolatileStatus(void)
 	board_status.raw_buffer_3_occupied = 0;
 	board_status.raw_buffer_4_occupied = 0;
 	board_status.raw_buffer_5_occupied = 0;
+	board_status.compression_buffer_occupied = 0;
 
 	// reset uptime
 	board_status.uptime_session = 0;

@@ -15,8 +15,8 @@
 ../Core/Inc/tiny_jpeg.h:567:13:tjei_encode_and_write_MCU	9
 ../Core/Inc/tiny_jpeg.h:633:12:tjei_encode_main	24
 ../Core/Inc/tiny_jpeg.h:853:13:tjei_memory_func	4
-../Core/Inc/tiny_jpeg.h:881:12:tje_encode_with_func	14
-../Core/Inc/tiny_jpeg.h:922:5:tje_encode_to_memory	3
+../Core/Inc/tiny_jpeg.h:906:12:tje_encode_with_func	14
+../Core/Inc/tiny_jpeg.h:975:5:tje_encode_to_memory	3
 ../Core/Src/photo.c:22:6:CAM_ResetAssert	1
 ../Core/Src/photo.c:27:6:CAM_ResetRelease	1
 ../Core/Src/photo.c:35:6:ActivateCAMA	4
@@ -30,5 +30,5 @@
 ../Core/Src/photo.c:271:19:CAM_ReadReg	1
 ../Core/Src/photo.c:286:19:CAM_Init	8
 ../Core/Src/photo.c:826:19:Photo_CaptureRaw	8
-../Core/Src/photo.c:922:6:InitCamParams	1
-../Core/Src/photo.c:928:9:CompressRawPhoto	3
+../Core/Src/photo.c:924:6:InitCamParams	1
+../Core/Src/photo.c:930:9:CompressRawPhoto	3

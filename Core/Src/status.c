@@ -46,7 +46,7 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "uptime_session [ms]: %lu\r\n", board_status.uptime_session);
 	Log(log_buf);
 
-	sprintf(log_buf, "uptime_total [s]: %lu\r\n", board_status.uptime_total);
+	sprintf(log_buf, "uptime_total [s]: %lu\r\n", board_status.uptime_total + board_status.uptime_session / 1000);		// uptime_total is only calculated on boot
 	Log(log_buf);
 
 	sprintf(log_buf, "boot_count: %lu\r\n", board_status.boot_count);
@@ -112,7 +112,7 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "compression_ptr_address: 0x%06lX\r\n", board_status.compression_ptr_address);
 	Log(log_buf);
 
-	sprintf(log_buf, "compression_count: %u\r\n", board_status.compression_count);
+	sprintf(log_buf, "compression_count_in_memory: %u\r\n", board_status.compression_count);
 	Log(log_buf);
 
 	sprintf(log_buf, "fram_bytes_left: %lu\r\n", board_status.fram_bytes_left);
@@ -150,14 +150,10 @@ void LogBoardStatusFull(void)
 	//sprintf(log_buf, "backup_fw_crc: 0x%08lX\r\n", board_status.backup_fw_crc);
 	//Log(log_buf);
 
+	sprintf(log_buf, "size_of_board_status: %u/%u Bytes\r\n", sizeof(board_status_t), AIRMAC_SIZE - HEADER_SIZE);
+	Log(log_buf);
+
 	return;
 }
-
-
-
-
-
-
-
 
 

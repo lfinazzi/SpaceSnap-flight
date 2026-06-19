@@ -55,77 +55,139 @@ uint8_t FRAM_ReadByte(uint32_t addr);
 
 
 /********************************************************************************
- * @brief  Reads part ID to verify init communication
+ * @brief  Reads the device ID from the FRAM via the RDID command (0x9F).
  *
- * @param  id_buf   uint8_t to save id
- * 		   len		uint8_t to save id length
+ * @note   Transmits the RDID opcode followed by one dummy byte, then clocks
+ *         in len bytes of ID data. CS is asserted for the full transaction.
+ *         Returns 0 on success, 1 if either SPI transaction fails.
  *
- * @retval uint8_t   0 if ok, 1 if error
+ * @param  id_buf  Pointer to destination buffer for the ID bytes.
+ * @param  len     Number of ID bytes to read.
+ *
+ * @return 0 on success (both SPI transactions returned HAL_OK).
+ *         1 if either the transmit or receive SPI transaction failed.
  ********************************************************************************/
 uint8_t FRAM_ReadDeviceID(uint8_t *id_buf, uint8_t len);
 
 
 /********************************************************************************
- * @brief  Reads device ID and compares with expected value. If it doesn't match,
- * 		   throws error
+ * @brief  Reads the FRAM device ID and verifies it against the expected value.
  *
+ * @note   Calls FRAM_ReadDeviceID() to read 4 ID bytes and compares them
+ *         against the expected ID {0x51, 0x82, 0x06, 0x00} via memcmp().
+ *         Logs the raw ID bytes and pass/fail result over UART4. Should be
+ *         called during boot after a minimum 1ms delay from power-up to
+ *         satisfy the CY15B108QSN tPU requirement (450us), as the chip ignores
+ *         all commands until tPU has elapsed.
+ *
+ * @return 1 if the device ID matches the expected value.
+ *         0 if the device ID does not match or the SPI transaction failed.
  ********************************************************************************/
 uint8_t TestFRAM(void);
 
 
 /********************************************************************************
- * @brief  Writes board status to FRAM so it can be preserved in the case of
- *         power down.
+ * @brief  Saves board_status and compression_table to FRAM.
  *
  * @note   Serializes the entire board_status_t struct into FRAM starting at
- *         FRAM_STATUS_BASE_ADDR, writing one byte at a time. Assumes the
- *         global board_status variable is up to date before calling.
+ *         BOARD_STATUS_START, then serializes the compression table
+ *         (MAX_COMPRESSED_PHOTOS entries of compression_index_entry_t) starting
+ *         at COMPRESSION_TABLE_START, writing one byte at a time via
+ *         FRAM_WriteByte(). Assumes both global variables are up to date
+ *         before calling.
  ********************************************************************************/
 void SaveBoardStatusFRAM(void);
 
 
 /********************************************************************************
- * @brief  Loads board status from FRAM into the global board_status struct
- *         on bootup.
+ * @brief  Loads board_status and compression_table from FRAM on bootup.
  *
- * @note   Reads sizeof(board_status_t) bytes from FRAM starting at
- *         FRAM_STATUS_BASE_ADDR, restoring the last saved system state.
- *         After loading, increments boot_count and saves the updated struct
- *         back to FRAM to track the number of power cycles.
+ * @note   Calls TestFRAM() first. On success, reads sizeof(board_status_t)
+ *         bytes from BOARD_STATUS_START into board_status, and
+ *         MAX_COMPRESSED_PHOTOS * sizeof(compression_index_entry_t) bytes
+ *         from COMPRESSION_TABLE_START into compression_table, one byte at
+ *         a time via FRAM_ReadByte(). Sets board_status.fram_ok accordingly.
+ *
+ *         On TestFRAM() failure, board_status is not loaded from FRAM but
+ *         execution continues with the default zero-initialized state.
+ *
+ *         boot_count is incremented and SaveBoardStatusFRAM() is called
+ *         unconditionally after the load attempt, regardless of whether
+ *         TestFRAM() passed or failed.
  ********************************************************************************/
 void LoadBoardStatusFRAM(void);
 
 
-// Erases FRAM writable space and initializes to zero. Also points the compression_ptr to PHOTO_DATA_START
-// Doesn't touch FW backup space
+/********************************************************************************
+ * @brief  Erases the entire FRAM writable region and resets all system state.
+ *
+ * @note   Writes 0x00 to every byte from address 0x00 to FIRMWARE_BACKUP_START
+ *         via FRAM_WriteByte(). The IWDG is kicked on every byte write to
+ *         prevent a watchdog reset during the erase. This operation takes
+ *         approximately 40 seconds. Does not touch the firmware backup region
+ *         (FIRMWARE_BACKUP_START and above).
+ *
+ *         After erasing, zeroes board_status and compression_table in RAM
+ *         via memset(), resets board_status.compression_ptr_address to
+ *         PHOTO_DATA_START, and recalculates board_status.fram_bytes_left.
+ *         Note: unlike EraseCompressions(), this also zeroes board_status
+ *         itself, losing all persistent counters and state.
+ ********************************************************************************/
 void EraseFRAM(void);
 
-/********************************************************************************
- * @brief  Save a buffer from SRAM into FRAM using a single burst write.
- *
- * For CY15B116x (16Mb, 2048K x 8) — 21-bit address space.
- * Opcode 0x02 (WRITE), 3-byte address, burst data with CS held LOW.
- * Address auto-increments; rolls over from 0x1FFFFF to 0x000000.
- *
- * @param  buffer       Pointer to source data (uint8_t array).
- * @param  size         Number of bytes to write.
- * @param  fram_address Starting FRAM address (must be <= 0x1FFFFF).
- */
- void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address);
 
- /**
-  * @brief  Read a buffer from FRAM into SRAM using a single burst read.
+/********************************************************************************
+ * @brief  Saves a buffer from SRAM into FRAM using a single burst write.
+ *
+ * @note   Issues a WREN command before writing, as required by the
+ *         CY15B108QSN protocol. Transmits the WRITE opcode (0x02) followed
+ *         by the 24-bit address MSB first, then streams the full buffer with
+ *         CS held LOW for the entire burst. The FRAM's internal address
+ *         counter auto-increments after each byte.
+ *
+ *         Silently returns without writing if fram_address + size would
+ *         exceed FIRMWARE_BACKUP_START, to protect the firmware backup region.
+ *
+ * @param  buffer       Pointer to source data in SRAM (uint8_t array).
+ * @param  size         Number of bytes to write.
+ * @param  fram_address Starting FRAM address.
+ ********************************************************************************/
+void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address);
+
+
+ /********************************************************************************
+  * @brief  Reads a buffer from FRAM into SRAM using a single burst read.
   *
-  * Per CY15B108QSN datasheet section (READ, opcode 0x03):
-  *   - Single READ command with 3-byte address, then stream data in with CS held LOW
-  *   - Internal address counter auto-increments after each byte
-  *   - No latency/dummy cycles required for standard READ at SPI mode
+  * @note   Transmits the READ opcode (0x03) followed by the 24-bit address
+  *         MSB first, then clocks in size bytes with CS held LOW for the
+  *         entire burst. The FRAM's internal address counter auto-increments
+  *         after each byte. No dummy cycles are required for standard READ
+  *         per the CY15B108QSN datasheet.
   *
   * @param  buffer       Destination buffer in SRAM (uint8_t array).
   * @param  size         Number of bytes to read.
-  * @param  fram_address Starting FRAM address (must be <= 0x1FFFFF for 16Mb).
-  */
+  * @param  fram_address Starting FRAM address.
+  ********************************************************************************/
  void ReadBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address);
+
+
+/********************************************************************************
+ * @brief  Erases the compressed photo region in FRAM and resets compression
+ *         tracking state.
+ *
+ * @note   Writes 0x00 to every byte from PHOTO_DATA_START to
+ *         FIRMWARE_BACKUP_START via FRAM_WriteByte(). The IWDG is kicked on
+ *         every byte write to prevent a watchdog reset during the erase.
+ *         This operation takes approximately 40 seconds.
+ *
+ *         After erasing, resets compression_table[] to zero via memset(),
+ *         resets board_status.compression_ptr_address to PHOTO_DATA_START,
+ *         recalculates board_status.fram_bytes_left, and clears
+ *         board_status.compression_count. Does not touch board_status fields
+ *         outside of compression tracking, unlike EraseFRAM() which zeroes
+ *         the entire board_status struct.
+ ********************************************************************************/
+void EraseCompressions(void);
 
 
 #endif

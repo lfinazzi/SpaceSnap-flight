@@ -18,6 +18,5 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
 {
     dcmi_frame_ready = 1;
-    Log("DCMI frame callback fired\r\n");
 }
 

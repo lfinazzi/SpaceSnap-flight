@@ -834,8 +834,10 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
 
     /* Fill header */
     buf->designator    = designator;
-    buf->timestamp_MSB = (uint16_t)(board_status.uptime_total >> 16);
-    buf->timestamp_LSB = (uint16_t)(board_status.uptime_total & 0xFFFF);
+    uint32_t uptime = (board_status.uptime_session & 0xFFFF0000) | (board_status.uptime_session & 0x0000FFFF);
+    uptime /= 1000; 	// Pass to seconds (rounded)
+    buf->timestamp_MSB = (uint16_t)(board_status.uptime_total >> 16) + (uint16_t)(uptime >> 16);
+    buf->timestamp_LSB = (uint16_t)(board_status.uptime_total & 0xFFFF) + (uint16_t)(uptime & 0xFFFF);
 
     // Saved in uint16_t for memory alignment. Some bytes wasted, but negligible
     for (int i = 0; i < OPCODE_SIZE; i++) {

@@ -70,6 +70,7 @@ typedef struct {
     uint8_t  raw_buffer_3_occupied;      			// is raw buffer 3 in use?
     uint8_t  raw_buffer_4_occupied;     			// is raw buffer 4 in use?
     uint8_t  raw_buffer_5_occupied;      			// is raw buffer 5 in use?
+    uint8_t  compression_buffer_occupied;      		// is compression buffer in use?
 
     // ADC readings
     uint32_t  mcu_temp;								// MCU Temp reading of MCU with ADC
@@ -94,28 +95,50 @@ extern uint32_t seconds;				  // Seconds elapsed
 
 
 /********************************************************************************
- * @brief  Updates the global board_status struct with the latest system state.
+ * @brief  Updates volatile fields in board_status with the latest system
+ *         state.
  *
- * @note   Reads current values from system variables and writes them into the
- *         global board_status_t instance. Should be called before any operation
- *         that transmits or saves board status, such as responding to a
- *         telemetry request or calling SaveBoardStatusFRAM().
+ * @note   Updates board_status.uptime_session from HAL_GetTick() and reads
+ *         ADC values (MCU temperature and VREFINT) via Read_MCU_ADC_Vals().
+ *         Should be called before any operation that transmits or saves
+ *         board_status, such as CMD_GetStatus() or SaveBoardStatusFRAM().
  ********************************************************************************/
 void UpdateStatus(void);
 
+
 /********************************************************************************
- * @brief  Logs a summary of the restored board status on bootup.
+ * @brief  Logs a brief summary of board status over UART4 (debug).
  *
- * @note   Should be called once during initialization after LoadBoardStatusFRAM().
- *         Prints boot count, uptime from last session, total photos taken and
- *         compressions performed.
+ * @note   Should be called once during initialization after
+ *         LoadBoardStatusFRAM(). Prints boot count, total historic uptime,
+ *         total photos taken, compressions performed, and FRAM/SRAM init
+ *         status on two lines.
  ********************************************************************************/
 void LogBoardStatus(void);
 
+
 /********************************************************************************
- * @brief  Logs a full summary of the restored board status on request.
- * TODO: Comment
+ * @brief  Logs a full field-by-field breakdown of board_status over UART4
+ *         (debug).
+ *
+ * @note   Prints one line per field covering all board_status_t members:
+ *         uptime (session and total, where total includes the current session
+ *         contribution), boot count, power-down counters, reset cause
+ *         counters, last_reset_cause, FRAM/SRAM init flags, last instruction
+ *         and opcode (in hex), operation counters, FRAM compression tracking,
+ *         SRAM buffer occupancy flags, decoded VDD voltage and MCU temperature
+ *         (computed from raw ADC values via VREFINT_CAL and TEMPSENSOR
+ *         constants), and board_status_t size vs available tx_buffer payload.
+ *
+ *         backup_fw_crc is currently commented out (TODO: pending CRC
+ *         implementation). images_rejected_black is always 0 (TODO: pending
+ *         black filtering implementation).
+ *
+ *         Called automatically by CMD_GetStatus() on every status request.
+ *         Requires -u _printf_float linker flag for float formatting support
+ *         (VDD and MCU temperature fields use %.3f and %.1f respectively).
  ********************************************************************************/
 void LogBoardStatusFull(void);
+
 
 #endif

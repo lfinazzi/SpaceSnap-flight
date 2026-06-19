@@ -1,4 +1,4 @@
-../Core/Src/sram.c:12:6:TestSRAM	5
-../Core/Src/sram.c:50:6:DumpRawBuffer	4
-../Core/Src/sram.c:113:6:DumpCompressedBuffer	4
-../Core/Src/sram.c:173:6:ResetVolatileStatus	1
+../Core/Src/sram.c:11:6:TestSRAM	5
+../Core/Src/sram.c:49:6:DumpRawBuffer	4
+../Core/Src/sram.c:85:6:DumpCompressedBuffer	4
+../Core/Src/sram.c:120:6:ResetVolatileStatus	1

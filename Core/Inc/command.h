@@ -23,6 +23,7 @@
 #define COMMAND_FRAM_FULL							(81U)		// Compressions not saved because FRAM is full
 #define COMMAND_BUFFER_INVALID						(82U)		// Buffer does not exist
 #define COMMAND_INDEX_FULL							(83U)		// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
+#define COMMAND_CONFIRM_FAILED_ID					(84U)		// Failed to confirm opcode to execute dangerous instruction
 
 #define MIN_INTERVAL 						 		(1U) 		// Minutes in interval for STATE_DELAYED_PICTURE (max. waiting is 256*MIN_INTERVAL minutes)
 
@@ -50,8 +51,10 @@ typedef enum {
 	CMD_DUMP_SRAM_BIN_ID        	= 0x13,
 	CMD_DUMP_FRAM_BIN_ID 			= 0x14,
 
+	/* DANGER ZONE */
 	CMD_ERASE_FRAM_ID			    = 0x88,
 	CMD_FORCE_RESET_ID			    = 0x89,
+	CMD_ERASE_COMP_ID				= 0x90,
 
 } cmd_id_t;
 
@@ -69,7 +72,8 @@ typedef enum {
 	CMD_COMPRESS_ERROR = COMMAND_COMPRESS_ERROR,				// Photo could not be compressed
 	CMD_FRAM_FULL = COMMAND_FRAM_FULL,							// Compressions not saved because FRAM is full
 	CMD_BUFFER_INVALID = COMMAND_BUFFER_INVALID,				// Buffer number does not exist
-	CMD_INDEX_FULL = COMMAND_INDEX_FULL							// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
+	CMD_INDEX_FULL = COMMAND_INDEX_FULL,						// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
+	CMD_CONFIRM_FAILED = COMMAND_CONFIRM_FAILED_ID				// Failed to confirm opcode needed for instruction execution
 	// ... add more here
 } CMD_ReturnStatus;
 
@@ -79,7 +83,7 @@ typedef enum {
  *         to dispatch incoming instructions through a uniform interface.
  *
  * @note   All command handler implementations must match this signature.
- *         Handlers are typically stored in a lookup table indexed by opcode.
+ *         Handlers are stored in a lookup table indexed by opcode.
  *
  * @param  opcode    Pointer to the received opcode byte(s) for the instruction
  *                   to be executed.
@@ -136,174 +140,409 @@ const command_t* GetCommand(uint8_t instruction_number);
 
 
 /********************************************************************************
- * @brief  Captures a raw photo into raw_buffer_1.
+ * @brief  Captures a single raw photo using the selected camera and stores it
+ *         in the selected raw photo buffer.
  *
- * @note   Currently fills raw_buffer_1->data with a synthetic gradient for
- *         testing. Replace with Camera_Capture() when camera hardware is
- *         available. Increments board_status.photos_taken and marks
- *         raw_buffer_1_occupied.
+ * @note   Activates and initializes the selected camera (A or B), captures a
+ *         raw frame via Photo_CaptureRaw(), then deactivates the camera.
+ *         Increments board_status.photos_taken and marks the corresponding
+ *         raw_buffer_N_occupied flag on success.
  *
- * opcode[0] --> buffer number (4 MSb), CAM number (4 lsb)
- * opcode[1] --> Use black filtering? 0 if no, 1 if yes
- * opcode[2] --> photo tries if black filtering enabled. Otherwise unused
- * opcode[3] --> black threshold for filtering if enabled. Otherwise unised
- * opcode[4] --> Unused for CMD_TakePicture
+ *         Black filtering is not yet implemented (TODO). Once implemented, if
+ *         filter_flag is set, the function should count black pixels in the
+ *         captured image and, if the count exceeds black_threshold, retake the
+ *         photo, up to a maximum of "tries" attempts, before giving up.
  *
- * Take a single pic with CAM N (0 for A, 1 for B) and save in BUFFER 0 with opcode: 0N 00 00 00 00
+ * @note   Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
  *
- * @return CMD_OK always.
- *********************************************************************************/
+ * @param  opcode Pointer to a 5-byte opcode array:
+ *                opcode[0] --> buffer number (4 MSb), CAM number (4 LSb)
+ *                opcode[1] --> Use black filtering? 0 = no, 1 = yes
+ *                opcode[2] --> photo tries if black filtering enabled, otherwise unused
+ *                opcode[3] --> black threshold for filtering if enabled, otherwise unused
+ *                opcode[4] --> unused for CMD_TakePicture
+ *
+ *                Example: take a single pic with CAM B and save in BUFFER 0
+ *                with opcode: 01 00 00 00 00
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if buffer_number is out of range.
+ *         CMD_CAM_BOOT_ERROR if the selected camera fails to initialize, or if
+ *         cam_number is invalid (not 0 or 1).
+ *         CMD_CAM_DCMI_ERROR if Photo_CaptureRaw() fails.
+ ********************************************************************************/
 CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode);
 
 
 /********************************************************************************
- * @brief  Schedules a delayed photo capture after N × MIN_INTERVAL minutes.
+ * @brief  Schedules a delayed photo capture after N x MIN_INTERVAL minutes.
  *
  * @note   Reads the delay count from opcode[4], records HAL_GetTick() as the
  *         start time, and writes COMMAND_SCHEDULED + the delay count into
  *         tx_buffer[1:2] for the OBC response. State machine transitions to
  *         STATE_DELAYED_PICTURE via the CMD_SCHEDULED return value.
  *
- * opcode[0:3] --> Same as CMD_TakePicture
- * opcode[4] --> picture delay (max delay = 255*MIN_INTERVAL mins. If MIN_INTERVAL = 5, max. delay is 21h
+ * @note   Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ * @param  opcode Pointer to a 5-byte opcode array:
+ *                opcode[0:3] --> same as CMD_TakePicture
+ *                opcode[4]   --> picture delay, in units of MIN_INTERVAL minutes
+ *                                (max delay = 255 x MIN_INTERVAL mins; if
+ *                                MIN_INTERVAL = 5, max delay is 21h)
  *
  * @return CMD_SCHEDULED always.
- *********************************************************************************/
+ ********************************************************************************/
 CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode);
 
 
 /********************************************************************************
  * @brief  Serializes board_status into tx_buffer[1..] for transmission.
  *
- * @note   Updates board_status.uptime_ms from HAL_GetTick() before copying.
- *         A compile-time static assert verifies that sizeof(board_status_t)
- *         fits within tx_buffer (AIRMAC_SIZE - 1 bytes available).
+ * @note   Updates board_status.uptime_session from HAL_GetTick() before
+ *         copying. A compile-time static assert verifies that
+ *         sizeof(board_status_t) fits within tx_buffer (AIRMAC_SIZE - 2
+ *         bytes available). Also calls LogBoardStatusFull() to print a full
+ *         field-by-field breakdown of board_status over UART4 (debug) for
+ *         human viewing.
  *
- * @param  opcode   Unused.
+ * @param  opcode Unused.
  *
  * @return CMD_OK always.
- *********************************************************************************/
+ ********************************************************************************/
 CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode);
 
 
 /********************************************************************************
- * @brief  Dumpsraw  photo to UART4 (debug).
+ * @brief  Dumps a raw photo buffer's header fields and pixel data to UART4
+ *         (debug).
  *
- * @note   Selects the source buffer from opcode[0] (1, 2, or 3).
+ * @note   Selects the source buffer from opcode[0]. Prints the opcode array
+ *         and reconstructed 32-bit timestamp, then calls DumpRawBuffer() to
+ *         hex-dump the full pixel data (L * H * sizeof(uint16_t) bytes) over
+ *         UART4. This can take a while given the size of a full raw frame.
  *
- * @param  opcode   opcode[0]: buffer selector.
+ * @note   Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
  *
- * @return CMD_OK on success
- *********************************************************************************/
+ *         NOTE: opcode[] is declared as uint16_t[OPCODE_SIZE] in raw_photo_t,
+ *         but is currently printed with %02X (byte-width) format specifiers
+ *		   on purpose.
+ *
+ * @param  opcode opcode[0]: raw buffer number to dump (0 to RAW_PHOTO_COUNT-1).
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if slot is out of range.
+ ********************************************************************************/
 CMD_ReturnStatus CMD_DumpRaw(uint8_t *opcode);
 
+
 /********************************************************************************
- * @brief  Dumps compressed photo to UART4 (debug).
+ * @brief  Dumps the compressed photo buffer (header fields and JPEG data) to
+ *         UART4 (debug).
  *
- * @note   Dumps compressed SRAM buffer to UART4 (debug)
+ * @note   Only one compressed SRAM buffer exists (index 0), so no buffer
+ *         selector opcode is needed. Checks board_status.compression_buffer_occupied
+ *         before proceeding, since the SRAM buffer may not hold a valid
+ *         compression even if one was performed in a previous boot session
+ *         (SRAM contents do not persist across resets). Prints the opcode
+ *         array, reconstructed 32-bit timestamp, and quality, then calls
+ *         DumpCompressedBuffer() to hex-dump the compressed JPEG data over
+ *         UART4.
  *
- * @param  opcode   unused
- * @return CMD_OK on success
- *********************************************************************************/
+ * @note   Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ *         NOTE: opcode[] is declared as uint16_t[OPCODE_SIZE] in raw_photo_t,
+ *         but is currently printed with %02X (byte-width) format specifiers
+ *		   on purpose.
+ *
+ * @param  opcode Unused.
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if no compression currently exists in the SRAM
+ *         buffer (board_status.compression_buffer_occupied == 0).
+ ********************************************************************************/
 CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode);
 
-/********************************************************************************
- * @brief  Changes parameter configs for both CAMs
- *
- * @note   Selects the source buffer from opcode[0] (1, 2, or 3). Calculates
- *         the byte offset as chunk_index × CHUNK_SIZE, where chunk_index is
- *         the big-endian 16-bit value in opcode[1:2]. Returns
- *         CMD_BUFFER_UNOCCUPIED if the requested buffer is empty or the
- *         buffer choice is invalid, CMD_BUFFER_OOB if the offset exceeds the
- *         total frame size.
- *
- * @param  opcode   opcode[0]: parameter selection
- *                  opcode[1]: MSB of 16b write value
- *                  opcode[2]: LSB of 16b write value
- *
- * @returns CMD_OK
- *********************************************************************************/
-CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode);
 
 /********************************************************************************
- * @brief  Compresses raw photo in a given buffer and saves it in SRAM + FRAM
+ * @brief  Changes a configurable camera parameter shared by both CAMs.
  *
- * @param  opcode   opcode[0]: raw buffer selected
- *                  opcode[1]: Quality of compression: 1, 2 or 3 (from worse to best)
+ * @note   UNTESTED. Currently only index 0 (ae_rule_algo_val) is implemented.
+ *         TODO: add other parameters as needed; if added, update this comment
+ *         to document each new index.
  *
- * @returns CMD_OK or CMD_COMPRESS_ERROR
- *********************************************************************************/
+ *         Selects which parameter to modify via opcode[0], and writes the
+ *         16-bit value reconstructed from opcode[1:2] (big-endian) into the
+ *         corresponding field in cam_params.
+ *
+ * @note   Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ * @param  opcode opcode[0]: index of the parameter to change (0 = ae_rule_algo_val)
+ *                opcode[1]: value MSB
+ *                opcode[2]: value LSB
+ *
+ * @return CMD_OK if idx matches a known parameter and the value was written.
+ *         CMD_ERROR if idx does not match any known parameter.
+ ********************************************************************************/
+CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Compresses the raw photo in a given buffer and saves the result in
+ *         both the SRAM compression buffer and FRAM.
+ *
+ * @note   Calls CompressRawPhoto() to perform the actual compression into the
+ *         single SRAM compressed_photo_t buffer. On success, computes the
+ *         header and JPEG sizes, checks that the FRAM region before
+ *         FIRMWARE_BACKUP_START has enough space and that the compression
+ *         index table is not full, then writes the header and JPEG data to
+ *         FRAM at board_status.compression_ptr_address, advancing the
+ *         pointer and updating board_status.fram_bytes_left accordingly.
+ *         Adds a new entry to compression_table[] and increments
+ *         board_status.compression_count, compressions_done, and sets
+ *         compression_buffer_occupied.
+ *
+ * @note   Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ * @param  opcode opcode[0]: raw buffer selected
+ *                opcode[1]: quality of compression: 1, 2, or 3 (worst to best)
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if buffer is out of range.
+ *         CMD_COMPRESS_ERROR if CompressRawPhoto() fails.
+ *         CMD_FRAM_FULL if there is not enough remaining FRAM space before
+ *         FIRMWARE_BACKUP_START to store the compressed result.
+ *         CMD_INDEX_FULL if compression_table[] has reached MAX_COMPRESSED_PHOTOS.
+ ********************************************************************************/
 CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode);
 
 
 /********************************************************************************
- * @brief  Flags FRAM to be erased on next boot
+ * @brief  Erases FRAM immediately, gated behind a fixed confirmation opcode.
  *
- * @param  opcode  unused
+ * @note   Requires opcode to exactly match the confirmation sequence
+ *         0A 0F 0A 0F 0A before proceeding, to reduce the risk of accidental
+ *         erasure from a corrupted/garbled command. Calls EraseFRAM(), which
+ *         performs the erase synchronously before returning.
  *
- * @returns CMD_OK
- *********************************************************************************/
+ * @note   Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ * @param  opcode Must exactly equal {0x0A, 0x0F, 0x0A, 0x0F, 0x0A} for the
+ *                erase to proceed.
+ *
+ * @return CMD_OK on success.
+ *         CMD_CONFIRMATION_FAILED if opcode does not match the required
+ *         confirmation sequence.
+ ********************************************************************************/
 CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode);
 
+
 /********************************************************************************
- * @brief  Performs software reset of USS
+ * @brief  Performs a software reset of the USS via IWDG timeout.
  *
- * @param  opcode  unused
+ * @note   Increments board_status.requested_power_downs and persists
+ *         board_status to FRAM before resetting, so the counter survives the
+ *         reboot. Transmits a COMMAND_SUCCESS response to the ground station
+ *         over RS485 before resetting, so the OBC receives an acknowledgement.
  *
- * @returns none
- *********************************************************************************/
+ *         Disables all interrupts, then reconfigures the IWDG to its fastest
+ *         possible timeout (prescaler 4, reload 0, ~125us) and spins in an
+ *         infinite loop until the watchdog fires and resets the MCU.
+ *
+ *         The return statement (HAL_OK) is unreachable by design -- the
+ *         function never returns normally.
+ *
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ * @param  opcode Unused.
+ *
+ * @return Never returns. Included for CMD_ReturnStatus signature conformance.
+ ********************************************************************************/
 CMD_ReturnStatus CMD_ForceReset(uint8_t *opcode);
 
+
 /********************************************************************************
- * @brief  Sends a Frame in raw buffer back to GS. Will always send 117 bytes
- * 		   starting from address provided.
- * 		   Frame 1 is opcode 00 00 00 00
- * 		   Frame 2 is opcode 00 00 00 75
- * 		   Frame 3 is opcode 00 00 00 EA
- * 		   ...
+ * @brief  Sends a chunk of raw photo data from SRAM back to the ground station.
+ *         Always sends AIRMAC_SIZE - DATA_HEADER_SIZE bytes, zero-padded on
+ *         the final partial chunk.
  *
- * @param  opcode   opcode[0]: raw buffer selected
- *                  opcode[1:4]: start address
+ *         Frame 1 is opcode 00 00 00 00 00
+ *         Frame 2 is opcode 00 00 00 00 75
+ *         Frame 3 is opcode 00 00 00 00 EA
+ *         ...
  *
- * @returns CMD_OK if success
- *********************************************************************************/
+ * @note   The offset is a big-endian 32-bit value reconstructed from
+ *         opcode[1:4], representing the byte offset from the start of the
+ *         raw photo data[] array. The final chunk is zero-padded to fill
+ *         the full AIRMAC_SIZE - DATA_HEADER_SIZE payload.
+ *
+ *         CMD_PopulateEcho() is intentionally NOT called in this function
+ *         to maximize the number of payload bytes sent per chunk.
+ *
+ * @param  opcode opcode[0]:   raw buffer selected (0 to RAW_PHOTO_COUNT-1)
+ *                opcode[1:4]: byte offset from start of raw photo data[]
+ *                             (big-endian 32-bit value)
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if slot is out of range.
+ *         CMD_BUFFER_OOB if offset is >= frame_size.
+ ********************************************************************************/
 CMD_ReturnStatus CMD_SendRawFrame(uint8_t *opcode);
 
-/********************************************************************************
- * @brief  Sends a compressed Frame in FRAM back to GS. Will always send 117 bytes
- * 		   starting from address provided.
- * 		   Frame 1 is opcode 00 00 00 00
- * 		   Frame 2 is opcode 00 00 00 75
- * 		   Frame 3 is opcode 00 00 00 EA
- * 		   ...
- *
- * @param  opcode   opcode[0]: compression selected in FRAM
- *                  opcode[1:4]: start address
- *
- * @returns none		TODO: Document this
- *********************************************************************************/
-CMD_ReturnStatus CMD_SendCompFrame(uint8_t *opcode);
 
 /********************************************************************************
- * @brief  Sends a raw buffer header with metadata
- * 		   ...
+ * @brief  Sends a chunk of compressed JPEG data from FRAM back to the ground
+ *         station. Always sends AIRMAC_SIZE - DATA_HEADER_SIZE bytes,
+ *         zero-padded on the final partial chunk.
  *
- * @param  opcode   opcode[0]: raw buffer selected
+ *         Frame 1 is opcode 00 00 00 00 00
+ *         Frame 2 is opcode 00 00 00 00 75
+ *         Frame 3 is opcode 00 00 00 00 EA
+ *         ...
  *
- * @returns CMD_OK if success
- *********************************************************************************/
+ * @note   The offset is a big-endian 32-bit value reconstructed from
+ *         opcode[1:4], representing the byte offset from the start of the
+ *         JPEG data region (i.e. after the compressed_photo_t header) of the
+ *         selected compression entry in FRAM. The FRAM read address is
+ *         computed as compression_table[index].fram_address + header_size +
+ *         offset. The final chunk is zero-padded to fill the full
+ *         AIRMAC_SIZE - DATA_HEADER_SIZE payload.
+ *
+ *         CMD_PopulateEcho() is intentionally NOT called in this function
+ *         to maximize the number of payload bytes sent per chunk.
+ *
+ * @param  opcode opcode[0]:   compression index in FRAM
+ *                             (0 to compression_count - 1)
+ *                opcode[1:4]: byte offset from start of JPEG data region
+ *                             (big-endian 32-bit value)
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if index >= compression_count or
+ *         compression_table[index].valid is not set.
+ *         CMD_BUFFER_OOB if offset >= jpeg_size.
+ ********************************************************************************/
+CMD_ReturnStatus CMD_SendCompFrame(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Sends the header metadata of a raw photo buffer to the ground
+ *         station in a single response (no chunking needed).
+ *
+ * @note   Copies the raw_photo_t header fields (everything before data[]:
+ *         designator, opcode, timestamp, black_pixels) into tx_buffer
+ *         starting at tx_buffer[HEADER_SIZE]. The header is fixed-size and
+ *         always fits within a single AIRMAC_SIZE response.
+ *         Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ * @param  opcode opcode[0]: raw buffer selected (0 to RAW_PHOTO_COUNT-1)
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if slot is out of range.
+ ********************************************************************************/
 CMD_ReturnStatus CMD_SendRawHeader(uint8_t *opcode);
 
 
 /********************************************************************************
- * @brief  Sends a compressed header with metadata
- * 		   ...
+ * @brief  Sends the header metadata of a compressed photo entry from FRAM
+ *         to the ground station in a single response (no chunking needed).
  *
- * @param  opcode   opcode[0]: compressed photo selected in compression table
+ * @note   Reads the compressed_photo_t header fields (everything before
+ *         data[]: index, designator, opcode, quality, size, timestamp,
+ *         black_pixels) from FRAM at compression_table[index].fram_address
+ *         into tx_buffer starting at tx_buffer[HEADER_SIZE]. The header is
+ *         fixed-size and always fits within a single AIRMAC_SIZE response.
+ *         Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
  *
- * @returns CMD_OK if success
- *********************************************************************************/
+ * @param  opcode opcode[0]: compression index in the compression table
+ *                           (0 to compression_count - 1)
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if index >= compression_count or
+ *         compression_table[index].valid is not set.
+ ********************************************************************************/
 CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Erases all compressed photo data from FRAM and resets the
+ *         compression table and related board_status fields.
+ *
+ * @note   Calls EraseCompressions(), which writes 0x00 to every byte from
+ *         PHOTO_DATA_START to FIRMWARE_BACKUP_START via FRAM_WriteByte().
+ *         This operation takes approximately 40 seconds. The IWDG is kicked
+ *         on every byte write to prevent a watchdog reset during the erase.
+ *
+ *         After the FRAM erase, resets the in-RAM compression_table[] to
+ *         zero, resets board_status.compression_ptr_address to
+ *         PHOTO_DATA_START, recalculates board_status.fram_bytes_left, and
+ *         clears board_status.compression_count.
+ *
+ *         Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ * @param  opcode Unused.
+ *
+ * @return CMD_OK always.
+ ********************************************************************************/
+CMD_ReturnStatus CMD_EraseCompressions(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Dumps the entire SRAM raw photo buffer region as raw binary over
+ *         UART4 (debug).
+ *
+ * @note   Transmits all bytes from RAW_PHOTO_BASE_ADDRESS to END_OF_BUFFERS
+ *         as raw binary via HAL_UART_Transmit() in 256-byte blocking chunks
+ *         over huart4. Kicks the IWDG after each chunk. This operation
+ *         transfers several MB and takes a significant amount of time
+ *         depending on UART baud rate -- do not use in time-critical paths.
+ *
+ *         Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ *         ---> CMD to capture bytes with python to decode full memory
+ *              Takes approximately 1m 20s
+ *
+ * @param  opcode Unused.
+ *
+ * @return CMD_OK always.
+ ********************************************************************************/
+CMD_ReturnStatus CMD_DumpAllSRAM(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Dumps the entire FRAM address space as raw binary over UART4
+ *         (debug).
+ *
+ * @note   Reads and transmits all bytes from BOARD_STATUS_START (0x00) to
+ *         END_OF_FRAM in 256-byte burst reads via ReadBufferFRAM(), which
+ *         uses a single SPI READ command with address auto-increment per
+ *         chunk (significantly faster than byte-at-a-time reads). Each
+ *         256-byte chunk is transmitted via HAL_UART_Transmit() on huart4
+ *         then the IWDG is kicked before the next chunk. Includes the full
+ *         FRAM address space: board status, compression table, photo data,
+ *         and firmware backup regions.
+ *
+ *         Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ *         ---> CMD to capture bytes with python to decode full memory
+ *              Takes approximately 50s
+ *
+ * @param  opcode Unused.
+ *
+ * @return CMD_OK always.
+ ********************************************************************************/
+CMD_ReturnStatus CMD_DumpAllFRAM(uint8_t *opcode);
 
 
 // Command Table definition lives in command.c — add new entries there

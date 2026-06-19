@@ -7,3 +7,4 @@
 ../Core/Src/fram.c:124:6:EraseFRAM	2
 ../Core/Src/fram.c:154:6:SaveBufferFRAM	2
 ../Core/Src/fram.c:182:6:ReadBufferFRAM	1
+../Core/Src/fram.c:196:6:EraseCompressions	2

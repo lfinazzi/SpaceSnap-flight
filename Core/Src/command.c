@@ -13,24 +13,29 @@
 
 extern IWDG_HandleTypeDef hiwdg;
 extern cam_params_t cam_params;
+extern UART_HandleTypeDef huart4;
 
 // Command table — add new entries here, matching the extern declaration in command.h, for variable return size, change here!
 const command_t command_table[] = {
-    { "CMD_TakePicture",        CMD_TAKE_PICTURE_ID,          CMD_TakePicture,         HAS_OPCODE, 	AIRMAC_SIZE - 2},
-    { "CMD_TakePictureDelayed", CMD_TAKE_PICTURE_DELAYED_ID,  CMD_TakePictureDelayed,  HAS_OPCODE, 	AIRMAC_SIZE - 2},
-    { "CMD_ChangeCamParams",    CMD_CHANGE_CAM_PARAMS_ID,     CMD_ChangeCamParams,     HAS_OPCODE, 	AIRMAC_SIZE - 2},
-    { "CMD_CompressRawPhoto",   CMD_COMPRESS_PHOTO_ID,     	  CMD_CompressRawPhoto,    HAS_OPCODE, 	AIRMAC_SIZE - 2},
-    { "CMD_GetStatus",          CMD_GET_STATUS_ID,            CMD_GetStatus,           NO_OPCODE , 	AIRMAC_SIZE - 2},
-    { "CMD_DumpRaw",   			CMD_DUMP_RAW_ID,     		  CMD_DumpRaw,    		   HAS_OPCODE, 	AIRMAC_SIZE - 2},
-    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   NO_OPCODE , 	AIRMAC_SIZE - 2},
-	{ "CMD_DumpCompressed",   	CMD_DUMP_COMPRESSED_ID,       CMD_DumpCompressed,      NO_OPCODE , 	AIRMAC_SIZE - 2},
-	{ "CMD_ForceReset",   		CMD_FORCE_RESET_ID,       	  CMD_ForceReset,          NO_OPCODE , 	AIRMAC_SIZE - 2},
-	{ "CMD_SendRawFrame",   	CMD_SEND_RAW_FRAME_ID,        CMD_SendRawFrame,        HAS_OPCODE, 	AIRMAC_SIZE - 2},
-	{ "CMD_SendCompFrame",   	CMD_SEND_COMP_FRAME_ID,       CMD_SendCompFrame,       HAS_OPCODE, 	AIRMAC_SIZE - 2},
-	{ "CMD_SendRawHeader",   	CMD_SEND_RAW_HEADER_ID,       CMD_SendRawHeader,       HAS_OPCODE, 	AIRMAC_SIZE - 2},
-	{ "CMD_SendCompHeader",   	CMD_SEND_COMP_HEADER_ID,      CMD_SendCompHeader,      HAS_OPCODE, 	AIRMAC_SIZE - 2},
+    { "CMD_TakePicture",        CMD_TAKE_PICTURE_ID,          CMD_TakePicture,         HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+    { "CMD_TakePictureDelayed", CMD_TAKE_PICTURE_DELAYED_ID,  CMD_TakePictureDelayed,  HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+    { "CMD_ChangeCamParams",    CMD_CHANGE_CAM_PARAMS_ID,     CMD_ChangeCamParams,     HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+    { "CMD_CompressRawPhoto",   CMD_COMPRESS_PHOTO_ID,     	  CMD_CompressRawPhoto,    HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+    { "CMD_GetStatus",          CMD_GET_STATUS_ID,            CMD_GetStatus,           NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
+    { "CMD_DumpRaw",   			CMD_DUMP_RAW_ID,     		  CMD_DumpRaw,    		   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_DumpCompressed",   	CMD_DUMP_COMPRESSED_ID,       CMD_DumpCompressed,      NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_ForceReset",   		CMD_FORCE_RESET_ID,       	  CMD_ForceReset,          NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_SendRawFrame",   	CMD_SEND_RAW_FRAME_ID,        CMD_SendRawFrame,        HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_SendCompFrame",   	CMD_SEND_COMP_FRAME_ID,       CMD_SendCompFrame,       HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_SendRawHeader",   	CMD_SEND_RAW_HEADER_ID,       CMD_SendRawHeader,       HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_SendCompHeader",   	CMD_SEND_COMP_HEADER_ID,      CMD_SendCompHeader,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_EraseCompressions",  CMD_ERASE_COMP_ID,      	  CMD_EraseCompressions,   NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_DumpAllSRAM",   		CMD_DUMP_SRAM_BIN_ID,         CMD_DumpAllSRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_DumpAllFRAM",   		CMD_DUMP_FRAM_BIN_ID,         CMD_DumpAllFRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
     // ... add more here
 };
+
 
 const uint16_t COMMAND_COUNT = sizeof(command_table) / sizeof(command_table[0]);
 
@@ -118,7 +123,6 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
     	board_status.last_instruction = instr_number;
     	board_status.last_cmd_status = st;											// Logs last command return executed
     	memcpy(board_status.last_opcode, opcode, OPCODE_SIZE);		// Logs last command opcode
-    	// TODO: Maybe write the command executed and opcode for some commands that have unused bytes?
     }
     return st;
 }
@@ -219,6 +223,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 		break;
 	}
 
+	CMD_PopulateEcho(opcode);
 	return CMD_OK;
 }
 
@@ -232,12 +237,13 @@ CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode) {
 
 	// write tx_buffer for USS return
 	tx_buffer[1] = COMMAND_SCHEDULED;
-	tx_buffer[2] = picture_delay_mins;
+	tx_buffer[2] = picture_delay_mins;			// TODO: replace with instr + opcode
 
 	char log_buf[64];
     sprintf(log_buf, "Scheduling delayed photo: %u x %umin intervals\r\n", picture_delay_mins, MIN_INTERVAL);
     Log(log_buf);
 
+	CMD_PopulateEcho(opcode);
 	return CMD_SCHEDULED;
 }
 
@@ -248,11 +254,12 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
 {
     board_status.uptime_session = HAL_GetTick();
 
-    _Static_assert(sizeof(board_status_t) <= AIRMAC_SIZE - 1, "board_status_t too large for tx_buffer");	// static assert for airmac_board_status_t size
+    _Static_assert(sizeof(board_status_t) <= AIRMAC_SIZE - HEADER_SIZE, "board_status_t too large for tx_buffer");	// static assert for airmac_board_status_t size
 
-    memcpy(&tx_buffer[1], &board_status, sizeof(board_status_t));		// outputs the abridged board status to the tx_buffer (which is too large)
+    memcpy(&tx_buffer[HEADER_SIZE], &board_status, sizeof(board_status_t));		// outputs the abridged board status to the tx_buffer (which is too large)
     LogBoardStatusFull();		// Outputs a summary of the board status to UART4 (debug) for human viewing
 
+    // No need to log the instr + opcode, as this gives board status with that info
     return CMD_OK;
 }
 
@@ -285,14 +292,22 @@ CMD_ReturnStatus CMD_DumpRaw(uint8_t *opcode)
 
 
 	DumpRawBuffer(slot, L * H * sizeof(uint16_t));		// Takes a while!
+
+	CMD_PopulateEcho(opcode);
 	return CMD_OK;
 }
 
 /*
- * No opcode, can include it in case of many compressed buffers
+ * No opcode, can be included in case of many compressed buffers
  */
 CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode)
 {
+
+	if (!board_status.compression_buffer_occupied) {
+		Log("No compression in SRAM buffer!\r\n");
+		return CMD_BUFFER_INVALID;
+	}
+
 	compressed_photo_t *compression = COMPRESSED_BUFFER(0);		// Only one compressed buffer
 	char log_buf[64];
 
@@ -315,6 +330,8 @@ CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode)
 
 	uint32_t size = ((uint32_t)compression->size_MSB << 16) | compression->size_LSB;
 	DumpCompressedBuffer(0, size);			// Only one compressed buffer
+
+	CMD_PopulateEcho(opcode);
 	return CMD_OK;
 }
 
@@ -323,20 +340,22 @@ CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode)
  * opcode[1] --> value MSB
  * opcode[2] --> value LSB
  */
-// TODO: Untested, for now AE is not used in taking pictures
 CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode)
 {
 	uint8_t idx = opcode[0];		// number of parameter to change
 	uint16_t value = ( opcode[1] << 8 ) | opcode[2];
+	CMD_ReturnStatus ret = CMD_OK;
 	switch(idx) {
 	case 0:
-		cam_params.ae_rule_algo_val = value;		// TODO: other parameters?
+		cam_params.ae_rule_algo_val = value;			// add new params here
 		break;
 	default:
+		ret = CMD_ERROR;
 		break;
 	}
 
-	return CMD_OK;
+	CMD_PopulateEcho(opcode);
+	return ret;
 }
 
 /*
@@ -404,19 +423,32 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode)
 	// Increment number of compressions in memory by one
 	board_status.compression_count++;		// compressions in memory currently
 	board_status.compressions_done++;		// total compressions done
+	board_status.compression_buffer_occupied = 1;
 
+	CMD_PopulateEcho(opcode);
 	return CMD_OK;
 }
 
 /*
- * No opcode
+ * opcode[0:4] --> opcode to confirm instruction
  */
 CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode)
 {
+	static const uint8_t confirm_seq[OPCODE_SIZE] = {0x0A, 0x0F, 0x0A, 0x0F, 0x0A};		// opcode needed to confirm FRAM erase
+
+	if (memcmp(opcode, confirm_seq, OPCODE_SIZE) != 0) {
+		Log("FRAM erase confirmation mismatch -- aborting.\r\n");
+		return CMD_CONFIRM_FAILED;
+	}
+
 	EraseFRAM();
+	CMD_PopulateEcho(opcode);
 	return CMD_OK;
 }
 
+/*
+ * no opcode
+ */
 CMD_ReturnStatus CMD_ForceReset(uint8_t *opcode)
 {
     Log("Forced reset requested. Resetting...\r\n");
@@ -426,6 +458,7 @@ CMD_ReturnStatus CMD_ForceReset(uint8_t *opcode)
     SaveBufferFRAM((uint8_t *)&board_status, sizeof(board_status), BOARD_STATUS_START);
 
     tx_buffer[1] = COMMAND_SUCCESS;		// Force to send a successful message to GS before reset
+	CMD_PopulateEcho(opcode);			// populates received instr + opcode before transmission
     TransmitBufferRS485();				// Sends the message through RS485
 
     __disable_irq();
@@ -439,9 +472,15 @@ CMD_ReturnStatus CMD_ForceReset(uint8_t *opcode)
     while (1) {
         // IWDG fires almost immediately
     }
-    return HAL_OK;	// This will never be reached
+
+    // This will never be reached
+    return HAL_OK;
 }
 
+/*
+ * opcode[0]   --> raw buffer to use
+ * opcode[1:4] --> offset from raw buffer start to transfer
+ */
 CMD_ReturnStatus CMD_SendRawFrame(uint8_t *opcode)
 {
 	uint8_t slot = opcode[0];		// buffer selected
@@ -459,25 +498,33 @@ CMD_ReturnStatus CMD_SendRawFrame(uint8_t *opcode)
 	uint32_t frame_size = sizeof(raw_buffer->data);
 
 	if (offset >= frame_size) {
-		Log("Out of bounds address requested!\r\n");
+		Log("Out of bounds address requested!\r\n");	// For first photo, last address is 0x00095FF0
 		return CMD_BUFFER_OOB;
 	}
 
-	uint32_t chunk_size = AIRMAC_SIZE - 2;  // First two bytes are start byte and CMD_RETURN
+	uint32_t chunk_size = AIRMAC_SIZE - DATA_HEADER_SIZE;  // First bytes are HEADER
 	uint32_t remaining  = frame_size - offset;
 	if (chunk_size > remaining) chunk_size = remaining;  // last chunk: 33 bytes
 
 	// Populates tx_buffer with response frame starting at correct address
-	memcpy(&tx_buffer[2], (uint8_t*)raw_buffer->data + offset, chunk_size);
+	memcpy(&tx_buffer[DATA_HEADER_SIZE], (uint8_t*)raw_buffer->data + offset, chunk_size);
 
 	// Zero-pad if this is the final partial chunk
-	if (chunk_size < (AIRMAC_SIZE - 2)) {
-		memset(&tx_buffer[2 + chunk_size], 0, (AIRMAC_SIZE - 2) - chunk_size);		// First two bytes are start byte and CMD_RETURN
+	if (chunk_size < (AIRMAC_SIZE - DATA_HEADER_SIZE)) {
+		memset(&tx_buffer[DATA_HEADER_SIZE + chunk_size], 0, (AIRMAC_SIZE - DATA_HEADER_SIZE) - chunk_size);		// First bytes are HEADER
 	}
 
+	// Debug print to UART4
+	LogRawFrameDebug(slot, offset, frame_size, chunk_size, remaining);
+
+	// No instruction and opcode header on purpose!
 	return CMD_OK;
 }
 
+/*
+ * opcode[0]   --> compressed buffer to use
+ * opcode[1:4] --> offset from compressed photo start to transfer
+ */
 CMD_ReturnStatus CMD_SendCompFrame(uint8_t *opcode)
 {
 	uint8_t  index  = opcode[0];
@@ -503,20 +550,26 @@ CMD_ReturnStatus CMD_SendCompFrame(uint8_t *opcode)
 		return CMD_BUFFER_OOB;
 	}
 
-	uint32_t chunk_size = AIRMAC_SIZE - 2;  // first two bytes are start byte and CMD_RETURN
+	uint32_t chunk_size = AIRMAC_SIZE - DATA_HEADER_SIZE;  // first bytes are HEADER
 	uint32_t remaining  = jpeg_size - offset;
 	if (chunk_size > remaining) chunk_size = remaining;  // last chunk: partial
 
-	ReadBufferFRAM(&tx_buffer[2], chunk_size, jpeg_start + offset);
+	ReadBufferFRAM(&tx_buffer[DATA_HEADER_SIZE], chunk_size, jpeg_start + offset);
 
 	// Zero-pad if this is the final partial chunk
-	if (chunk_size < (AIRMAC_SIZE - 2)) {
-		memset(&tx_buffer[2 + chunk_size], 0, (AIRMAC_SIZE - 2) - chunk_size);		// First two bytes are start byte and CMD_RETURN
+	if (chunk_size < (AIRMAC_SIZE - DATA_HEADER_SIZE)) {
+		memset(&tx_buffer[DATA_HEADER_SIZE + chunk_size], 0, (AIRMAC_SIZE - DATA_HEADER_SIZE) - chunk_size);		// First bytes are HEADER
 	}
+
+	// debug print
+	LogCompFrameDebug(index, offset, header_size, total_size, jpeg_size, jpeg_start, chunk_size, remaining);
 
 	return CMD_OK;
 }
 
+/*
+ * opcode[0]   --> raw buffer to use
+ */
 CMD_ReturnStatus CMD_SendRawHeader(uint8_t *opcode)
 {
 	uint8_t slot = opcode[0];		// buffer selected
@@ -532,11 +585,18 @@ CMD_ReturnStatus CMD_SendRawHeader(uint8_t *opcode)
 	uint32_t header_size = sizeof(raw_photo_t) - sizeof(raw_buffer->data);  // header only!
 
 	// Header is small and fixed-size — fits in a single response, no chunking needed
-	memcpy(&tx_buffer[2], (uint8_t*)raw_buffer, header_size);		// First two bytes are start byte and CMD_RETURN
+	memcpy(&tx_buffer[HEADER_SIZE], (uint8_t*)raw_buffer, header_size);		// First two bytes are start byte and CMD_RETURN
 
+	// Debug print
+	LogRawHeaderDebug(slot, raw_buffer, header_size);
+
+	CMD_PopulateEcho(opcode);
 	return CMD_OK;
 }
 
+/*
+ * opcode[0]   --> compressed photo to use
+ */
 CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode)
 {
 	uint8_t index = opcode[0];
@@ -565,18 +625,77 @@ CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode)
 	Log(verify_buf);
 
 	// Header is small and fixed-size — fits in a single response, no chunking needed. Write directly to tx_buffer
-	ReadBufferFRAM(&tx_buffer[2], header_size, fram_address);			// First two bytes are start byte and CMD_RETURN
+	ReadBufferFRAM(&tx_buffer[HEADER_SIZE], header_size, fram_address);			// First bytes are HEADER
 
 	// Print what was actually read into tx_buffer
 	int pos = sprintf(verify_buf, "Header at 0x%06lX: ", fram_address);
 	for (int i = 0; i < (int)header_size; i++) {
-		pos += sprintf(verify_buf + pos, "%02X ", tx_buffer[2 + i]);	// First two bytes are start byte and CMD_RETURN
+		pos += sprintf(verify_buf + pos, "%02X ", tx_buffer[HEADER_SIZE + i]);	// First bytes are HEADER
 	}
 	sprintf(verify_buf + pos, "\r\n");
 	Log(verify_buf);
 
+	// Debug print
+	LogCompHeaderDebug(index, fram_address, header_size);
+
+	CMD_PopulateEcho(opcode);
 	return CMD_OK;
 }
 
+/*
+ * no opcode
+ */
+CMD_ReturnStatus CMD_EraseCompressions(uint8_t *opcode)
+{
+	EraseCompressions();
 
+	CMD_PopulateEcho(opcode);
+	return CMD_OK;
+}
+
+/*
+ * no opcode
+ */
+CMD_ReturnStatus CMD_DumpAllSRAM(uint8_t *opcode)
+{
+    uint8_t *start = (uint8_t *)RAW_PHOTO_BASE_ADDRESS;
+    uint8_t *end   = (uint8_t *)END_OF_BUFFERS;
+    uint32_t total = (uint32_t)(end - start);
+
+    uint32_t offset = 0;
+    while (offset < total)
+    {
+        uint32_t chunk = ((total - offset) < 256) ? (total - offset) : 256;
+        HAL_UART_Transmit(&huart4, start + offset, chunk, HAL_MAX_DELAY);
+        HAL_IWDG_Refresh(&hiwdg);
+        offset += chunk;
+    }
+
+    CMD_PopulateEcho(opcode);
+    return CMD_OK;
+}
+
+/*
+ * no opcode
+ */
+CMD_ReturnStatus CMD_DumpAllFRAM(uint8_t *opcode)
+{
+    uint32_t total = END_OF_FRAM - BOARD_STATUS_START;
+    uint8_t  staging[256];
+
+    uint32_t offset = 0;
+    while (offset < total)
+    {
+        uint32_t chunk = ((total - offset) < 256) ? (total - offset) : 256;
+
+        ReadBufferFRAM(staging, chunk, BOARD_STATUS_START + offset);
+
+        HAL_UART_Transmit(&huart4, staging, chunk, HAL_MAX_DELAY);
+        HAL_IWDG_Refresh(&hiwdg);
+        offset += chunk;
+    }
+
+    CMD_PopulateEcho(opcode);
+    return CMD_OK;
+}
 
