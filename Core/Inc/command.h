@@ -23,7 +23,7 @@
 #define COMMAND_FRAM_FULL							(81U)		// Compressions not saved because FRAM is full
 #define COMMAND_BUFFER_INVALID						(82U)		// Buffer does not exist
 #define COMMAND_INDEX_FULL							(83U)		// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
-#define COMMAND_CONFIRM_FAILED_ID					(84U)		// Failed to confirm opcode to execute dangerous instruction
+#define COMMAND_CONFIRM_FAILED						(84U)		// Failed to confirm opcode to execute dangerous instruction
 
 #define MIN_INTERVAL 						 		(1U) 		// Minutes in interval for STATE_DELAYED_PICTURE (max. waiting is 256*MIN_INTERVAL minutes)
 
@@ -55,6 +55,7 @@ typedef enum {
 	CMD_ERASE_FRAM_ID			    = 0x88,
 	CMD_FORCE_RESET_ID			    = 0x89,
 	CMD_ERASE_COMP_ID				= 0x90,
+	CMD_BACKUP_FIRMWARE_ID			= 0x91,
 
 } cmd_id_t;
 
@@ -73,7 +74,7 @@ typedef enum {
 	CMD_FRAM_FULL = COMMAND_FRAM_FULL,							// Compressions not saved because FRAM is full
 	CMD_BUFFER_INVALID = COMMAND_BUFFER_INVALID,				// Buffer number does not exist
 	CMD_INDEX_FULL = COMMAND_INDEX_FULL,						// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
-	CMD_CONFIRM_FAILED = COMMAND_CONFIRM_FAILED_ID				// Failed to confirm opcode needed for instruction execution
+	CMD_CONFIRM_FAILED = COMMAND_CONFIRM_FAILED					// Failed to confirm opcode needed for instruction execution
 	// ... add more here
 } CMD_ReturnStatus;
 
@@ -148,9 +149,8 @@ const command_t* GetCommand(uint8_t instruction_number);
  *         Increments board_status.photos_taken and marks the corresponding
  *         raw_buffer_N_occupied flag on success.
  *
- *         Black filtering is not yet implemented (TODO). Once implemented, if
- *         filter_flag is set, the function should count black pixels in the
- *         captured image and, if the count exceeds black_threshold, retake the
+ *         If filter_flag is set, the function should count black pixels in the
+ *         captured image and, if the count number exceeds black_fraction, retake the
  *         photo, up to a maximum of "tries" attempts, before giving up.
  *
  * @note   Calls PopulateEcho() to write the instruction number and opcode
@@ -160,7 +160,7 @@ const command_t* GetCommand(uint8_t instruction_number);
  *                opcode[0] --> buffer number (4 MSb), CAM number (4 LSb)
  *                opcode[1] --> Use black filtering? 0 = no, 1 = yes
  *                opcode[2] --> photo tries if black filtering enabled, otherwise unused
- *                opcode[3] --> black threshold for filtering if enabled, otherwise unused
+ *                opcode[3] --> black fraction for filtering if enabled, otherwise unused
  *                opcode[4] --> unused for CMD_TakePicture
  *
  *                Example: take a single pic with CAM B and save in BUFFER 0
@@ -543,6 +543,41 @@ CMD_ReturnStatus CMD_DumpAllSRAM(uint8_t *opcode);
  * @return CMD_OK always.
  ********************************************************************************/
 CMD_ReturnStatus CMD_DumpAllFRAM(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Backs up the application firmware image from internal flash to
+ *         the FRAM backup region, then verifies the write by reading back
+ *         and recomputing the CRC32.
+ *
+ * @note   Requires an exact 5-byte confirmation opcode (0xB4 0xC4 0xB4
+ *         0xC4 0xB4) to prevent accidental invocation. Derives the
+ *         application image bounds from the linker-exported symbols
+ *         _app_flash_start and _app_flash_end, streams the image from
+ *         memory-mapped flash to FRAM in 256-byte chunks via
+ *         SaveFRAM_Unlocked(), and computes a running zlib-compatible
+ *         CRC32 (poly 0xEDB88320, init/final XOR 0xFFFFFFFF) matching
+ *         the bootloader's CRC32_Calculate(). On completion, writes
+ *         app_size and the computed CRC32 to the FRAM backup header
+ *         (fw_backup_info at FIRMWARE_BACKUP_START). Then reads the
+ *         image back from FRAM and recomputes the CRC32 to confirm the
+ *         data was stored correctly, catching SPI/FRAM write faults that
+ *         a write-then-trust approach would miss. IWDG is refreshed
+ *         between chunks in both passes. Returns CMD_ERROR without
+ *         updating the header if app_size is out of range or the
+ *         readback CRC mismatches.
+ *
+ * @param  opcode   Pointer to the 5-byte opcode field from the AirMAC
+ *                  frame. Must exactly match the confirmation sequence
+ *                  or the command aborts immediately.
+ *
+ * @retval CMD_ReturnStatus   CMD_OK on success. CMD_CONFIRM_FAILED if
+ *                            the confirmation sequence does not match.
+ *                            CMD_ERROR if app_size is out of range or
+ *                            the FRAM readback CRC does not match the
+ *                            computed CRC.
+ ********************************************************************************/
+CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode);
 
 
 // Command Table definition lives in command.c — add new entries there

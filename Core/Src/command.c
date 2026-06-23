@@ -2,6 +2,7 @@
 #include "photo.h"
 #include "status.h"
 #include "sram.h"
+#include "fram.h"
 #include "comms.h"
 #include "fram.h"
 
@@ -23,16 +24,17 @@ const command_t command_table[] = {
     { "CMD_CompressRawPhoto",   CMD_COMPRESS_PHOTO_ID,     	  CMD_CompressRawPhoto,    HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
     { "CMD_GetStatus",          CMD_GET_STATUS_ID,            CMD_GetStatus,           NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
     { "CMD_DumpRaw",   			CMD_DUMP_RAW_ID,     		  CMD_DumpRaw,    		   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
+    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   HAS_OPCODE,  AIRMAC_SIZE - HEADER_SIZE},		// confirm needed
 	{ "CMD_DumpCompressed",   	CMD_DUMP_COMPRESSED_ID,       CMD_DumpCompressed,      NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_ForceReset",   		CMD_FORCE_RESET_ID,       	  CMD_ForceReset,          NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_SendRawFrame",   	CMD_SEND_RAW_FRAME_ID,        CMD_SendRawFrame,        HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_SendCompFrame",   	CMD_SEND_COMP_FRAME_ID,       CMD_SendCompFrame,       HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_SendRawHeader",   	CMD_SEND_RAW_HEADER_ID,       CMD_SendRawHeader,       HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_SendCompHeader",   	CMD_SEND_COMP_HEADER_ID,      CMD_SendCompHeader,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_EraseCompressions",  CMD_ERASE_COMP_ID,      	  CMD_EraseCompressions,   NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_EraseCompressions",  CMD_ERASE_COMP_ID,      	  CMD_EraseCompressions,   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},		// confirm needed
 	{ "CMD_DumpAllSRAM",   		CMD_DUMP_SRAM_BIN_ID,         CMD_DumpAllSRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_DumpAllFRAM",   		CMD_DUMP_FRAM_BIN_ID,         CMD_DumpAllFRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_BackupFirmware",   	CMD_BACKUP_FIRMWARE_ID,       CMD_BackupFirmware,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},		// confirm needed
     // ... add more here
 };
 
@@ -48,6 +50,7 @@ uint8_t delayed_flag = 0;						// Flag used to transmit scheduled command buffer
 
 uint8_t ignore_flag = 0;						// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
 
+extern fw_backup_info_t fw_backup_info;
 
 void ReturnCode(CMD_ReturnStatus st)
 {
@@ -90,7 +93,10 @@ void ReturnCode(CMD_ReturnStatus st)
 	else if (st == CMD_INDEX_FULL) {
 			tx_buffer[1] = COMMAND_INDEX_FULL;
 	}
-	// TODO: when implementing Commands, different runtime errors will be handled here! Add accordingly.
+	else if (st == CMD_CONFIRM_FAILED) {
+			tx_buffer[1] = COMMAND_CONFIRM_FAILED;
+	}
+	// when implementing Commands, different runtime errors are handled here! Add accordingly.
 }
 
 
@@ -141,16 +147,20 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	char log_buf[64];
 
 	uint8_t cam_number 		= opcode[0] & 0x0F;					// 0000_1111 mask,
-	uint8_t buffer_number 	= (opcode[0] & 0xF0) >> 4;;	    	// 1111_0000 mask, upper nibble
+	uint8_t buffer_number 	= (opcode[0] & 0xF0) >> 4;	    	// 1111_0000 mask, upper nibble
 	uint8_t filter_flag 	= opcode[1];
 	uint8_t tries 		 	= opcode[2];
-	uint8_t black_threshold = opcode[3];
+	uint8_t black_fraction  = opcode[3];
 	// opcode 4 unused here
 
 	if (buffer_number >= RAW_PHOTO_COUNT) {
 		Log("Invalid buffer number!\r\n");
 		return CMD_BUFFER_INVALID;
 	}
+
+	sprintf(log_buf, "cam=%d buf=%d filter=%d tries=%d threshold=%d\r\n",
+	        cam_number, buffer_number, filter_flag, tries, black_fraction);
+	Log(log_buf);
 
 	if(cam_number == 0){
 		ActivateCAMA();
@@ -165,12 +175,23 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 		}
 		Log("Camera A init OK\r\n");
 
-		// TODO: Algorithm to check for black pixels?
-		if (Photo_CaptureRaw(buffer_number, board_status.photos_taken, opcode) != HAL_OK) {
-			Log("CAMA: photo capture FAILED\r\n");
-			DeactivateCAMA();
-			return CMD_CAM_DCMI_ERROR;
+		if (filter_flag != 0){
+			Log("Black filtering activated\r\n");
+			if (Photo_CaptureRawBlack(buffer_number, board_status.photos_taken, opcode, tries, black_fraction) != HAL_OK) {
+				Log("CAMA: photo capture FAILED\r\n");
+				DeactivateCAMA();
+				return CMD_CAM_DCMI_ERROR;
+			}
 		}
+
+		else {	// no black filtering!
+			if (Photo_CaptureRaw(buffer_number, board_status.photos_taken, opcode) != HAL_OK) {
+				Log("CAMA: photo capture FAILED\r\n");
+				DeactivateCAMA();
+				return CMD_CAM_DCMI_ERROR;
+			}
+		}
+
 
 		HAL_Delay(10);
 		DeactivateCAMA();
@@ -188,10 +209,20 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 		}
 		Log("Camera B init OK\r\n");
 
-		if (Photo_CaptureRaw(buffer_number, board_status.photos_taken, opcode) != HAL_OK) {
-			Log("CAMB: photo capture FAILED\r\n");
-			DeactivateCAMB();
-			return CMD_CAM_DCMI_ERROR;
+		if (filter_flag != 0){
+			Log("Black filtering activated\r\n");
+			if (Photo_CaptureRawBlack(buffer_number, board_status.photos_taken, opcode, tries, black_fraction) != HAL_OK) {
+				Log("CAMB: photo capture FAILED\r\n");
+				DeactivateCAMB();
+				return CMD_CAM_DCMI_ERROR;
+			}
+		}
+		else {
+			if (Photo_CaptureRaw(buffer_number, board_status.photos_taken, opcode) != HAL_OK) {
+				Log("CAMB: photo capture FAILED\r\n");
+				DeactivateCAMB();
+				return CMD_CAM_DCMI_ERROR;
+			}
 		}
 
 		HAL_Delay(10);
@@ -237,7 +268,6 @@ CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode) {
 
 	// write tx_buffer for USS return
 	tx_buffer[1] = COMMAND_SCHEDULED;
-	tx_buffer[2] = picture_delay_mins;			// TODO: replace with instr + opcode
 
 	char log_buf[64];
     sprintf(log_buf, "Scheduling delayed photo: %u x %umin intervals\r\n", picture_delay_mins, MIN_INTERVAL);
@@ -254,9 +284,10 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
 {
     board_status.uptime_session = HAL_GetTick();
 
-    _Static_assert(sizeof(board_status_t) <= AIRMAC_SIZE - HEADER_SIZE, "board_status_t too large for tx_buffer");	// static assert for airmac_board_status_t size
+    _Static_assert(sizeof(board_status_t) + sizeof(fw_backup_info_t) <= AIRMAC_SIZE - HEADER_SIZE, "board_status_t too large for tx_buffer");	// static assert for airmac_board_status_t size
 
-    memcpy(&tx_buffer[HEADER_SIZE], &board_status, sizeof(board_status_t));		// outputs the abridged board status to the tx_buffer (which is too large)
+    memcpy(&tx_buffer[HEADER_SIZE], &board_status, sizeof(board_status_t));		// outputs the abridged board status to the tx_buffer
+    memcpy(&tx_buffer[HEADER_SIZE + sizeof(board_status_t)], &fw_backup_info, sizeof(fw_backup_info_t));	// outputs the fw backup info to the tx_buffer
     LogBoardStatusFull();		// Outputs a summary of the board status to UART4 (debug) for human viewing
 
     // No need to log the instr + opcode, as this gives board status with that info
@@ -310,8 +341,6 @@ CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode)
 
 	compressed_photo_t *compression = COMPRESSED_BUFFER(0);		// Only one compressed buffer
 	char log_buf[64];
-
-	// TODO: Check if there is no compression and throw an error if there isn't (if you try this function without a compression, board will enter bad state)
 
 	sprintf(log_buf, "  opcode:    %02X %02X %02X %02X %02X\r\n",
 	        compression->opcode[0],
@@ -647,6 +676,13 @@ CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode)
  */
 CMD_ReturnStatus CMD_EraseCompressions(uint8_t *opcode)
 {
+	static const uint8_t confirm_seq[OPCODE_SIZE] = {0xBA, 0xBF, 0x0A, 0x0F, 0x0A};		// opcode needed to confirm FRAM erase
+
+	if (memcmp(opcode, confirm_seq, OPCODE_SIZE) != 0) {
+		Log("FRAM erase confirmation mismatch -- aborting.\r\n");
+		return CMD_CONFIRM_FAILED;
+	}
+
 	EraseCompressions();
 
 	CMD_PopulateEcho(opcode);
@@ -699,3 +735,95 @@ CMD_ReturnStatus CMD_DumpAllFRAM(uint8_t *opcode)
     return CMD_OK;
 }
 
+
+/*
+ * opcode[0:4] --> confirmation sequence (must match exactly, see confirm_seq below)
+ */
+CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
+{
+	static const uint8_t confirm_seq[OPCODE_SIZE] = {0xB4, 0xC4, 0xB4, 0xC4, 0xB4};		// something deliberate
+
+	if (memcmp(opcode, confirm_seq, OPCODE_SIZE) != 0) {
+		Log("Firmware backup confirmation mismatch -- aborting.\r\n");
+		return CMD_CONFIRM_FAILED;
+	}
+
+	extern uint32_t _app_flash_start;
+	extern uint32_t _app_flash_end;
+	uint32_t app_start = (uint32_t)&_app_flash_start;
+	uint32_t app_end   = (uint32_t)&_app_flash_end;
+	uint32_t app_size  = app_end - app_start;
+
+	char log_buf[96];
+	sprintf(log_buf, "Backing up firmware: 0x%08lX - 0x%08lX (%lu bytes)\r\n",
+	        app_start, app_end, app_size);
+	Log(log_buf);
+
+	if (app_size == 0 || app_size > FIRMWARE_IMAGE_SIZE) {
+		Log("Firmware backup aborted: app_size out of range for backup region.\r\n");
+		return CMD_ERROR;
+	}
+
+	uint8_t  chunk[256];
+	uint32_t crc       = 0xFFFFFFFF;
+	uint32_t src        = app_start;
+	uint32_t dst        = FIRMWARE_IMAGE_START;
+	uint32_t remaining  = app_size;
+
+	while (remaining > 0) {
+		uint32_t n = (remaining > sizeof(chunk)) ? sizeof(chunk) : remaining;
+
+		memcpy(chunk, (uint8_t *)src, n);    // flash is memory-mapped, read like any pointer
+		SaveFRAM_Unlocked(chunk, n, dst);
+
+		for (uint32_t i = 0; i < n; i++) {   // CRC32 update, zlib-compatible (matches bootloader)
+			crc ^= chunk[i];
+			for (int b = 0; b < 8; b++)
+				crc = (crc >> 1) ^ (0xEDB88320UL & (-(int32_t)(crc & 1)));
+		}
+
+		src += n; dst += n; remaining -= n;
+		HAL_IWDG_Refresh(&hiwdg);
+	}
+	uint32_t final_crc = ~crc;
+
+
+	// Read back from FRAM and recompute CRC from what's ACTUALLY stored,
+	// to catch real SPI/FRAM write faults rather than trusting the write succeeded.
+	uint32_t verify_crc = 0xFFFFFFFF;
+	uint32_t verify_src  = FIRMWARE_IMAGE_START;
+	remaining = app_size;
+	while (remaining > 0) {
+		uint32_t n = (remaining > sizeof(chunk)) ? sizeof(chunk) : remaining;
+		ReadBufferFRAM(chunk, n, verify_src);
+		for (uint32_t i = 0; i < n; i++) {
+			verify_crc ^= chunk[i];
+			for (int b = 0; b < 8; b++)
+				verify_crc = (verify_crc >> 1) ^ (0xEDB88320UL & (-(int32_t)(verify_crc & 1)));
+		}
+		verify_src += n; remaining -= n;
+		HAL_IWDG_Refresh(&hiwdg);
+	}
+	verify_crc = ~verify_crc;
+
+	if (verify_crc != final_crc) {
+		sprintf(log_buf, "FRAM readback mismatch! wrote=0x%08lX read=0x%08lX\r\n", final_crc, verify_crc);
+		Log(log_buf);
+		return CMD_ERROR;
+	}
+
+	/* Only write header after image is verified — prevents bootloader
+	 * from seeing a valid header pointing to a corrupt image. */
+	fw_backup_info.fw_backup_size  = app_size;
+	fw_backup_info.fw_backup_crc32 = final_crc;
+	uint8_t *p = (uint8_t *)&fw_backup_info;
+	for (uint8_t i = 0; i < sizeof(fw_backup_info_t); i++) {
+		FRAM_WriteByte(FIRMWARE_BACKUP_START + i, p[i]);
+	}
+
+	sprintf(log_buf, "Firmware backup complete: size=%lu crc=0x%08lX\r\n", app_size, final_crc);
+	Log(log_buf);
+
+	CMD_PopulateEcho(opcode);
+	return CMD_OK;
+}

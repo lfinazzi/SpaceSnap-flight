@@ -94,6 +94,9 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
 
+  /* Relocate vector table to application base — Already done in SystemInit(), but no harm to leave this here */
+  SCB->VTOR = 0x08004000UL;
+
   ret = HAL_OK;										// Saves return of HAL calls
   state = 0;										// state = IDLE
   picture_delay_start = 0;							// Moment the delayed photo instruction was executed

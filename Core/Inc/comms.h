@@ -7,6 +7,7 @@
 
 #define AIRMAC_SIZE 						(119U)		// Max. AIRMAC frame size
 #define USS_ID								(165U) 		// RS-485 board ID for UNSAM SpaceSnap
+#define LS02_ID								(90U) 		// RS-485 board ID for LabOSat-02
 
 #define LOG_UART_TIMEOUT					(50U)		// Debug UART timeout in ms
 

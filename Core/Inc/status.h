@@ -14,6 +14,13 @@
 #define RESET_CAUSE_LOWPOWER       		(5U)
 
 
+
+typedef struct __attribute__((packed)) {
+    uint32_t fw_backup_size;   		// Size in bytes of main application backup in FRAM
+    uint32_t fw_backup_crc32;		// CRC32 of main application backup in FRAM
+} fw_backup_info_t;
+
+
 typedef struct __attribute__((packed)) {
     uint32_t fram_address;   // where the compression header starts in FRAM
     uint32_t total_size;     // header_size + jpeg_size for this entry
@@ -57,7 +64,7 @@ typedef struct {
     // Operation counters - NON-VOLATILE
     uint16_t photos_taken;               			// total raw photos taken
     uint16_t compressions_done;          			// total compressions performed
-    uint16_t images_rejected_black;					// TODO when implementing Black Filtering!
+    uint16_t images_rejected_black;					// total black images rejected
 
     // Compression FRAM memory tracking - NON-VOLATILE
     uint32_t compression_ptr_address; 				// Address for next compression in FRAM
@@ -76,11 +83,12 @@ typedef struct {
     uint32_t  mcu_temp;								// MCU Temp reading of MCU with ADC
     uint32_t  vrefint;								// VREF reading of MCU with ADC
 
-    // Firmware backup integrity
-    uint32_t backup_fw_crc;							// TODO, will need final CRC to compare. FW crc will be saved in FRAM and this will be calculated on boot
-
-
 } board_status_t;
+
+typedef char board_status_t_size[	// Static assert to be sure to erase FRAM after changing board_status_t struct
+    (sizeof(board_status_t) == 72) ? 1 : -1
+];
+
 
 // Saves current board status
 extern board_status_t board_status;
@@ -130,9 +138,7 @@ void LogBoardStatus(void);
  *         (computed from raw ADC values via VREFINT_CAL and TEMPSENSOR
  *         constants), and board_status_t size vs available tx_buffer payload.
  *
- *         backup_fw_crc is currently commented out (TODO: pending CRC
- *         implementation). images_rejected_black is always 0 (TODO: pending
- *         black filtering implementation).
+ *         backup_fw_crc and backup_fw_size are also included in this log.
  *
  *         Called automatically by CMD_GetStatus() on every status request.
  *         Requires -u _printf_float linker flag for float formatting support

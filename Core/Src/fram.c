@@ -3,6 +3,8 @@
 extern SPI_HandleTypeDef hspi2;
 extern IWDG_HandleTypeDef hiwdg;
 
+extern fw_backup_info_t fw_backup_info;
+
 void FRAM_WriteByte(uint32_t addr, uint8_t data)
 {
     uint8_t buf[5];
@@ -112,6 +114,10 @@ void LoadBoardStatusFRAM(void)
 		for(uint32_t i = 0; i < sizeof(compression_index_entry_t)*MAX_COMPRESSED_PHOTOS; i++)
 			pc[i] = FRAM_ReadByte(COMPRESSION_TABLE_START + i);
 
+		// reads backup size and crc from FRAM
+		ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_size, sizeof(uint32_t), FIRMWARE_BACKUP_START);
+		ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_crc32, sizeof(uint32_t), FIRMWARE_BACKUP_START + sizeof(uint32_t));
+
 		// Increment boot count and save back
         board_status.fram_ok = 1;
 	}
@@ -210,4 +216,31 @@ void EraseCompressions(void)
 
 	Log("Compressions erased\r\n");
 	return;
+}
+
+void SaveFRAM_Unlocked(uint8_t *buffer, uint32_t size, uint32_t fram_address)
+{
+    uint8_t cmd[4];
+
+    if (fram_address + size > END_OF_FRAM) {		// Would overflow 2MB FRAM
+        return;  // would wrap past 16Mb boundary
+    }
+
+    /* Write Enable Latch */
+    FRAM_CS_LOW();
+    cmd[0] = FRAM_CMD_WREN;
+    HAL_SPI_Transmit(&hspi2, cmd, 1, HAL_MAX_DELAY);
+    FRAM_CS_HIGH();
+
+    /* WRITE command + 21-bit address, then burst data */
+    FRAM_CS_LOW();
+    cmd[0] = FRAM_CMD_WRITE;
+    cmd[1] = (fram_address >> 16) & 0xFF;   // A[20:16]
+    cmd[2] = (fram_address >>  8) & 0xFF;   // A[15:8]
+    cmd[3] = (fram_address >>  0) & 0xFF;   // A[7:0]
+    HAL_SPI_Transmit(&hspi2, cmd, 4, HAL_MAX_DELAY);
+
+    HAL_SPI_Transmit(&hspi2, buffer, size, HAL_MAX_DELAY);
+
+    FRAM_CS_HIGH();
 }

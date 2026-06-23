@@ -12,10 +12,12 @@
 #define PHOTO_DATA_START				((COMPRESSION_TABLE_START) + ((sizeof(compression_index_entry_t))*(MAX_COMPRESSED_PHOTOS)))		// Space for compressions
 
 #define FIRMWARE_BACKUP_SIZE			(0x40000)		// 256 kB for FW backup image
+#define FIRMWARE_IMAGE_SIZE				((FIRMWARE_BACKUP_SIZE) - sizeof(fw_backup_info_t))			// ~256 kB for FW backup image
 
 #define END_OF_FRAM						(0x200000)		// 2 MB
 
 #define FIRMWARE_BACKUP_START 			((END_OF_FRAM) - (FIRMWARE_BACKUP_SIZE))
+#define FIRMWARE_IMAGE_START            ((FIRMWARE_BACKUP_START) + (sizeof(fw_backup_info_t)))
 
 // Pin PB12
 #define FRAM_CS_LOW()   	HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_RESET)
@@ -188,6 +190,30 @@ void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address);
  *         the entire board_status struct.
  ********************************************************************************/
 void EraseCompressions(void);
+
+
+/********************************************************************************
+ * @brief  Writes a buffer to FRAM at the specified address without
+ *         enforcing the reserved-region boundary.
+ *
+ * @note   Unlike the standard FRAM write path, this function has no
+ *         lower-bound address check and is the only write function that
+ *         can reach the firmware backup region (0x1C0000 - 0x1FFFFF).
+ *         It must only be called from CMD_BackupFirmware(). Asserts
+ *         Write Enable Latch (WREN) before each call as required by the
+ *         CY15B108QSN protocol, then issues the WRITE opcode followed
+ *         by the 24-bit address MSB first and bursts the full buffer in
+ *         a single CS assertion. Only the upper 2 MB boundary
+ *         (END_OF_FRAM) is checked — writes that would overflow the
+ *         physical device are silently discarded.
+ *
+ * @param  buffer        Pointer to the data to write.
+ * @param  size          Number of bytes to write.
+ * @param  fram_address  24-bit destination address in FRAM.
+ *
+ * @retval None
+ ********************************************************************************/
+void SaveFRAM_Unlocked(uint8_t *buffer, uint32_t size, uint32_t fram_address);
 
 
 #endif

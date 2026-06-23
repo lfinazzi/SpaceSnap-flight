@@ -912,12 +912,10 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
         Log(log_buf);
     }
 
-	// TODO: Assign black pixels LSB and MSB for this photo, for now 0. Will need to change this a little to write this val outside this function (in CMD)
 	buf->black_pixels_LSB = 0;
 	buf->black_pixels_MSB = 0;
 
-
-    Log("DCMI: frame captured\r\n");
+    Log("DCMI: frame captured OK\r\n");
     return HAL_OK;
 }
 
@@ -993,4 +991,74 @@ uint8_t CompressRawPhoto(uint8_t buffer, int quality)
 	Log("Compression successful!\r\n");
 
 	return 1;
+}
+
+uint32_t count_black_pixels_uyvy(volatile uint8_t *buffer,
+                                  	   uint32_t  num_pixels,
+									   uint8_t   black_threshold)
+{
+    uint32_t black_count = 0;
+    uint32_t num_words   = num_pixels / 2;  // each uint16_t holds one U/V + one Y
+
+    for (uint32_t i = 0; i < num_words; i++) {
+        // UYVY: [U0][Y0][V0][Y1] — Y bytes are at offsets 1 and 3
+        uint8_t y0 = buffer[i * 4 + 1];
+        uint8_t y1 = buffer[i * 2 + 3];
+
+        if (y0 <= BLACK_THRESHOLD) black_count++;
+        if (y1 <= BLACK_THRESHOLD) black_count++;
+    }
+
+    return black_count;
+}
+
+HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
+                                         uint16_t  designator,
+                                         uint8_t  *opcode,
+                                         uint8_t   tries,
+                                         uint8_t   black_fraction)
+{
+    char log_buf[64];
+    volatile raw_photo_t *buf = RAW_BUFFER(slot);
+
+    for (uint8_t attempt = 1; attempt <= tries; attempt++) {
+
+        sprintf(log_buf, "Black filter: attempt %d/%d\r\n", attempt, tries);
+        Log(log_buf);
+
+        HAL_StatusTypeDef ret = Photo_CaptureRaw(slot, designator, opcode);
+        if (ret != HAL_OK) {
+            sprintf(log_buf, "Capture failed on attempt %d, ret=%d\r\n", attempt, ret);
+            Log(log_buf);
+            return ret;  // propagate HAL_ERROR or HAL_TIMEOUT immediately
+        }
+
+        uint32_t total_pixels = H*L;
+        uint32_t black_pixels = count_black_pixels_uyvy(
+            (volatile uint8_t *)buf->data,
+            total_pixels,
+            BLACK_THRESHOLD
+        );
+
+        // Store black pixel count in the frame header (MSB/LSB)
+        buf->black_pixels_MSB = (black_pixels >> 8) & 0xFF;
+        buf->black_pixels_LSB =  black_pixels       & 0xFF;
+
+
+        // There are less black pixels than the maximum allowed
+        if (black_pixels <= black_fraction) {		// TODO: FIX!
+            Log("Frame passed black filter\r\n");
+            return HAL_OK;
+        }
+
+        Log("Frame rejected: too black\r\n");
+        board_status.images_rejected_black++;
+
+        if (attempt == tries) {
+            Log("All attempts rejected, giving up\r\n");
+            return HAL_ERROR;
+        }
+    }
+
+    return HAL_ERROR;  // unreachable, satisfies compiler
 }

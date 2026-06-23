@@ -124,13 +124,17 @@ void HandleIncomingCommand(app_state_t fallback_state)
 		  state = STATE_TRANSMIT_RESPONSE;
 	  }
 	}
-	else{
+	else if (*rx_buffer == LS02_ID){
 	  Log("Received LS-02 command\r\n");
 	  DisableRS485();
 	  if(delayed_flag == 1){ 				// USS was in STATE_DELAYED_PICTURE
 		  Log("Ignoring...\r\n");
 	  }
 	  state = fallback_state;
+	}
+	else {
+		Log("Unknown board ID, ignoring...\r\n");
+		state = STATE_IDLE;
 	}
 }
 

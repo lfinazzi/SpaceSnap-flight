@@ -18,6 +18,8 @@
 #define CAM_I2C_TIMEOUT			(100U)		  	// Timeout for I2C2
 #define DCMI_TIMEOUT 			(500U)			// Timeout for DCMI interface, expected transfer time is approx 20 ms
 
+#define BLACK_THRESHOLD			(16U)			// Min intensity to consider a pixel non-dark (out of 256), TODO: Verify this
+
 typedef struct __attribute__((packed)){
 	uint16_t designator;			  			// global raw photo number taken
 	uint16_t opcode[OPCODE_SIZE]; 				// opcodes sent to take picture
@@ -331,9 +333,6 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr);
  *         timeout, kicking the IWDG on each iteration. On timeout, logs DCMI
  *         and DMA status registers for diagnostics before returning HAL_TIMEOUT.
  *
- *         TODO: black_pixels_LSB and black_pixels_MSB are always written as
- *         0x0000. Black pixel counting is not yet implemented.
- *
  *         The sensor must be powered, configured and streaming (CAM_Init()
  *         completed successfully) before calling this function.
  *
@@ -385,5 +384,68 @@ void InitCamParams(void);
  *         0 if tje_encode_to_memory() failed.
  ********************************************************************************/
 uint8_t CompressRawPhoto(uint8_t buffer, int quality);
+
+
+/********************************************************************************
+ * @brief  Counts the number of pixels at or below a luma threshold in a
+ *         UYVY-packed YCbCr 4:2:2 buffer.
+ *
+ * @note   In UYVY format each 32-bit group encodes two pixels as:
+ *           word[0]: bits[15:8] = Y0,  bits[7:0] = U0
+ *           word[1]: bits[15:8] = Y1,  bits[7:0] = V0
+ *         Only the Y (luma) bytes are examined; chroma bytes are ignored.
+ *
+ *         In limited-range YCbCr (ITU-R BT.601) nominal black is Y=16.
+ *         For full-range output (0–255) nominal black is Y=0.
+ *         A threshold of 8–16 is recommended as a starting point to capture
+ *         deep-space black without clipping dark Earth features.
+ *
+ * @param  buffer           Pointer to UYVY pixel data. Must contain at least
+ *                          num_pixels / 2 uint16_t words. num_pixels must be even.
+ * @param  num_pixels       Total number of pixels in the image (width * height).
+ * @param  black_threshold  Luma value (0–255) at or below which a pixel is
+ *                          considered black.
+ *
+ * @return Number of pixels whose luma is <= black_threshold.
+ ********************************************************************************/
+uint32_t count_black_pixels_uyvy(volatile uint8_t *buffer, uint32_t  num_pixels, uint8_t black_threshold);
+
+
+/********************************************************************************
+ * @brief  Captures a raw frame with black-pixel filtering and automatic retry.
+ *
+ * @note   Wraps Photo_CaptureRaw() with a retry loop that discards frames
+ *         where the proportion of black pixels exceeds a computed threshold.
+ *         After each capture the luma channel of the UYVY buffer is inspected
+ *         via count_black_pixels_uyvy(). If the black fraction exceeds
+ *         BLACK_REJECT_FRACTION the frame is discarded and a new capture is
+ *         attempted, up to `tries` times total.
+ *
+ *         board_status.images_rejected_black is incremented for every
+ *         discarded frame. The slot buffer is left containing the last
+ *         captured frame regardless of whether it passed the filter, so the
+ *         caller can inspect it if needed.
+ *
+ *         The sensor must be powered, configured and streaming (CAM_Init()
+ *         completed successfully) before calling this function.
+ *
+ * @param  slot             Raw buffer slot index (0 to RAW_PHOTO_COUNT-1).
+ * @param  designator       Global photo sequence number written into the header.
+ * @param  opcode           Pointer to OPCODE_SIZE bytes written into the header.
+ * @param  tries            Maximum number of capture attempts (including the
+ *                          first). Must be >= 1.
+ * @param  black_fraction   Maximum tolerable fraction of black pixels allowed.
+ *
+ * @return HAL_OK      if a frame passed the black filter within `tries` attempts.
+ *         HAL_ERROR   if Photo_CaptureRaw() returned HAL_ERROR on any attempt,
+ *                     or if all `tries` frames were rejected as too black.
+ *         HAL_TIMEOUT if Photo_CaptureRaw() timed out on any attempt.
+ ********************************************************************************/
+HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
+                                        uint16_t  designator,
+                                        uint8_t  *opcode,
+                                        uint8_t   tries,
+                                        uint8_t   black_fraction);
+
 
 #endif

@@ -5,6 +5,7 @@
 // Saves current board status
 board_status_t board_status = {0};
 compression_index_entry_t compression_table[MAX_COMPRESSED_PHOTOS] = {0};		// Compression table in FRAM
+fw_backup_info_t fw_backup_info;		// unmodified on init on purpose, nothing can write this value except CMD_BackupFirmware()
 
 uint32_t timestamp = 0;
 uint32_t total_seconds = 0;
@@ -105,7 +106,7 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "compressions_done: %u\r\n", board_status.compressions_done);
 	Log(log_buf);
 
-	sprintf(log_buf, "images_rejected_black: %u\r\n", board_status.images_rejected_black);		// TODO
+	sprintf(log_buf, "images_rejected_black: %u\r\n", board_status.images_rejected_black);
 	Log(log_buf);
 
 	// FRAM compression tracking
@@ -140,17 +141,18 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "VDD: %.3f V\r\n", vdda_actual);
 	Log(log_buf);
 
-
 	float vsense = (board_status.mcu_temp * vdda_actual) / ADC_MAX_VALUE;
 	float temp_c = ((vsense - TEMPSENSOR_V25) / (TEMPSENSOR_AVG_SLOPE / 1000.0f)) + 25.0f;
 	sprintf(log_buf, "MCU Temp: %.1f C\r\n", temp_c);
 	Log(log_buf);
 
-	// Firmware backup integrity, TODO
-	//sprintf(log_buf, "backup_fw_crc: 0x%08lX\r\n", board_status.backup_fw_crc);
-	//Log(log_buf);
+	sprintf(log_buf, "size of application in FRAM: %lu Bytes\r\n", fw_backup_info.fw_backup_size);
+	Log(log_buf);
 
-	sprintf(log_buf, "size_of_board_status: %u/%u Bytes\r\n", sizeof(board_status_t), AIRMAC_SIZE - HEADER_SIZE);
+	sprintf(log_buf, "CRC of application in FRAM: 0x%06lX\r\n", fw_backup_info.fw_backup_crc32);
+	Log(log_buf);
+
+	sprintf(log_buf, "AirMac frame budget: %u/%u\r\n", sizeof(board_status_t) + sizeof(fw_backup_info_t), AIRMAC_SIZE);
 	Log(log_buf);
 
 	return;
