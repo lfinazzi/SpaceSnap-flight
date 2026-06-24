@@ -152,6 +152,16 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "CRC of application in FRAM: 0x%06lX\r\n", fw_backup_info.fw_backup_crc32);
 	Log(log_buf);
 
+	// Cam parameters in memory
+
+	Log("Cam params in memory ------------------------------\r\n");
+
+	sprintf(log_buf, "Black threshold: %u\r\n", board_status.cam_params.black_threshold);
+	Log(log_buf);
+
+	sprintf(log_buf, "Auto exposure algorithm preset: %u\r\n", board_status.cam_params.ae_rule_algo_val);
+	Log(log_buf);
+
 	sprintf(log_buf, "AirMac frame budget: %u/%u\r\n", sizeof(board_status_t) + sizeof(fw_backup_info_t), AIRMAC_SIZE);
 	Log(log_buf);
 

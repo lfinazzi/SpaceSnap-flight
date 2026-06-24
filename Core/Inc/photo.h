@@ -18,7 +18,8 @@
 #define CAM_I2C_TIMEOUT			(100U)		  	// Timeout for I2C2
 #define DCMI_TIMEOUT 			(500U)			// Timeout for DCMI interface, expected transfer time is approx 20 ms
 
-#define BLACK_THRESHOLD			(16U)			// Min intensity to consider a pixel non-dark (out of 256), TODO: Verify this
+#define BLACK_THRESHOLD_DEFAULT	(uint16_t)(32U)	// Min. intensity to consider a pixel non-dark (out of 256), default value, TODO: Verify this taking a picture with lens cap on
+#define AE_DEFAULT				(uint16_t)(3U)	// Default algorithm for auto-exposure
 
 typedef struct __attribute__((packed)){
 	uint16_t designator;			  			// global raw photo number taken
@@ -34,9 +35,11 @@ typedef char static_assert_raw_photo_t_size[	// Static assert that a complete ph
     (sizeof(raw_photo_t) == 614420) ? 1 : -1
 ];
 
-typedef struct {
+typedef struct __attribute__((packed)) {
+	uint16_t black_threshold;					// Threshold to consider a pixel black with black filtering enabled
 	uint16_t ae_rule_algo_val; 					// Algorithm for auto exposure
-} cam_params_t;		// These settings are the ones that can be changed for CameraParams
+} cam_params_t;									// These settings are the ones that can be changed for CameraParams
+// On adding more methods, remember to initialize with default macro values and add in CMD_ChangeCamParams() to be able to change them
 
 
 // Aligned for 16b (SRAM)
@@ -345,17 +348,6 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr);
  *         HAL_TIMEOUT if frame not completed within DCMI_TIMEOUT ms.
  ********************************************************************************/
 HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot, uint16_t designator, uint8_t  *opcode);
-
-
-/********************************************************************************
- * @brief  Initializes cam_params global struct with default values.
- *
- * @note   TODO: Default values are untested. ae_rule_algo_val is set to 0x0003
- *         (Adaptive for lowlights) but the AE algorithm configuration in
- *         CAM_Init() Stage 3 is currently commented out, so this value has
- *         no effect on sensor behavior until Stage 3 is enabled.
- ********************************************************************************/
-void InitCamParams(void);
 
 
 /********************************************************************************

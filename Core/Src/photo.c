@@ -919,12 +919,6 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
     return HAL_OK;
 }
 
-void InitCamParams(void)
-{
-	cam_params.ae_rule_algo_val = 0x0003; 		// TODO: Untested. Determine default for this
-	return;
-}
-
 uint8_t CompressRawPhoto(uint8_t buffer, int quality)
 {
 	volatile compressed_photo_t *compression = COMPRESSED_BUFFER(0);
@@ -956,7 +950,7 @@ uint8_t CompressRawPhoto(uint8_t buffer, int quality)
 	//                          1: Noticeable. About 1/6 the size of 3, or 1/3 the size of 2.
 	//      width, height:      image size in pixels
 	//      num_components:     Must be 3 for YUV422 input (already handled internally)
-	//      src_data:           pointer to YUV422 pixel data [Y0,Cb,Y1,Cr,...]
+	//      src_data:           pointer to YUV422 pixel data [Cb, Y0, Cr, Y1, Cr,...]
 	//
 	//  RETURN:
 	//      0 on error. 1 on success.
@@ -997,16 +991,23 @@ uint32_t count_black_pixels_uyvy(volatile uint8_t *buffer,
                                   	   uint32_t  num_pixels,
 									   uint8_t   black_threshold)
 {
+	char log_buf[96];
     uint32_t black_count = 0;
     uint32_t num_words   = num_pixels / 2;  // each uint16_t holds one U/V + one Y
 
     for (uint32_t i = 0; i < num_words; i++) {
         // UYVY: [U0][Y0][V0][Y1] — Y bytes are at offsets 1 and 3
         uint8_t y0 = buffer[i * 4 + 1];
-        uint8_t y1 = buffer[i * 2 + 3];
+        uint8_t y1 = buffer[i * 4 + 3];
 
-        if (y0 <= BLACK_THRESHOLD) black_count++;
-        if (y1 <= BLACK_THRESHOLD) black_count++;
+        if (y0 <= black_threshold) black_count++;
+        if (y1 <= black_threshold) black_count++;
+    }
+
+    // debug print
+    for (int i = 0; i < 8; i++) {
+        sprintf(log_buf, "Y[%d] = %d\r\n", i, buffer[i * 4 + 1]);
+        Log(log_buf);
     }
 
     return black_count;
@@ -1033,12 +1034,16 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
             return ret;  // propagate HAL_ERROR or HAL_TIMEOUT immediately
         }
 
-        uint32_t total_pixels = H*L;
+        uint32_t total_pixels = H * L;
         uint32_t black_pixels = count_black_pixels_uyvy(
             (volatile uint8_t *)buf->data,
             total_pixels,
-            BLACK_THRESHOLD
+            (uint8_t)board_status.cam_params.black_threshold		// saved in memory 2B aligned
         );
+
+        // Log to check how many black pixels were detected
+    	sprintf(log_buf, "Black pixels in image: %lu\r\n", black_pixels);
+    	Log(log_buf);
 
         // Store black pixel count in the frame header (MSB/LSB)
         buf->black_pixels_MSB = (black_pixels >> 8) & 0xFF;
@@ -1046,7 +1051,7 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
 
 
         // There are less black pixels than the maximum allowed
-        if (black_pixels <= black_fraction) {		// TODO: FIX!
+        if ((black_pixels * 200u) <= (total_pixels * (uint32_t)black_fraction)) {		// Each count in black_fraction represents 0.5% of image
             Log("Frame passed black filter\r\n");
             return HAL_OK;
         }
@@ -1058,6 +1063,7 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
             Log("All attempts rejected, giving up\r\n");
             return HAL_ERROR;
         }
+        Log("---------------------------------------------------\r\n");
     }
 
     return HAL_ERROR;  // unreachable, satisfies compiler

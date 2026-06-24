@@ -24,6 +24,7 @@
 #define COMMAND_BUFFER_INVALID						(82U)		// Buffer does not exist
 #define COMMAND_INDEX_FULL							(83U)		// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
 #define COMMAND_CONFIRM_FAILED						(84U)		// Failed to confirm opcode to execute dangerous instruction
+#define COMMAND_PARAM_INVALID						(85U)		// Invalid value for parameter in command
 
 #define MIN_INTERVAL 						 		(1U) 		// Minutes in interval for STATE_DELAYED_PICTURE (max. waiting is 256*MIN_INTERVAL minutes)
 
@@ -61,20 +62,21 @@ typedef enum {
 
 // Assignment of command returns with macro values
 typedef enum {
-	CMD_OK = COMMAND_SUCCESS,									// Correct command execution
-	CMD_ERROR = COMMAND_ERROR,									// Generic error
-	CMD_NOT_FOUND = COMMAND_NOT_FOUND_FAILURE,					// Command not found in table
-	CMD_INCORRECT_PARS = COMMAND_INCORRECT_PARAMETER_FAILURE,	// Wrong number of parameters for desired command
-	CMD_SCHEDULED = COMMAND_SCHEDULED,							// Command accepted, execution deferred
-	CMD_BUFFER_UNOCCUPIED = COMMAND_BUFFER_UNOCCUPIED, 			// Buffer requested unoccupied
-	CMD_BUFFER_OOB = COMMAND_BUFFER_OUT_OF_BOUNDS,				// Out of bounds buffer access
-	CMD_CAM_BOOT_ERROR = COMMAND_CAM_BOOT_ERROR,				// Camera not responsive on boot
-	CMD_CAM_DCMI_ERROR = COMMAND_CAM_DCMI_ERROR,				// Photo could not be captured through DCMI
-	CMD_COMPRESS_ERROR = COMMAND_COMPRESS_ERROR,				// Photo could not be compressed
-	CMD_FRAM_FULL = COMMAND_FRAM_FULL,							// Compressions not saved because FRAM is full
-	CMD_BUFFER_INVALID = COMMAND_BUFFER_INVALID,				// Buffer number does not exist
-	CMD_INDEX_FULL = COMMAND_INDEX_FULL,						// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
-	CMD_CONFIRM_FAILED = COMMAND_CONFIRM_FAILED					// Failed to confirm opcode needed for instruction execution
+	CMD_OK 					= COMMAND_SUCCESS,						// Correct command execution
+	CMD_ERROR 				= COMMAND_ERROR,						// Generic error
+	CMD_NOT_FOUND 			= COMMAND_NOT_FOUND_FAILURE,			// Command not found in table
+	CMD_INCORRECT_PARS 		= COMMAND_INCORRECT_PARAMETER_FAILURE,	// Wrong number of parameters for desired command
+	CMD_SCHEDULED 			= COMMAND_SCHEDULED,					// Command accepted, execution deferred
+	CMD_BUFFER_UNOCCUPIED 	= COMMAND_BUFFER_UNOCCUPIED, 			// Buffer requested unoccupied
+	CMD_BUFFER_OOB 			= COMMAND_BUFFER_OUT_OF_BOUNDS,			// Out of bounds buffer access
+	CMD_CAM_BOOT_ERROR 		= COMMAND_CAM_BOOT_ERROR,				// Camera not responsive on boot
+	CMD_CAM_DCMI_ERROR 		= COMMAND_CAM_DCMI_ERROR,				// Photo could not be captured through DCMI
+	CMD_COMPRESS_ERROR 		= COMMAND_COMPRESS_ERROR,				// Photo could not be compressed
+	CMD_FRAM_FULL 			= COMMAND_FRAM_FULL,					// Compressions not saved because FRAM is full
+	CMD_BUFFER_INVALID 		= COMMAND_BUFFER_INVALID,				// Buffer number does not exist
+	CMD_INDEX_FULL 			= COMMAND_INDEX_FULL,					// Trying to save a compression higher than MAX_COMPRESSED_PHOTOS
+	CMD_CONFIRM_FAILED 		= COMMAND_CONFIRM_FAILED,				// Failed to confirm opcode needed for instruction execution
+	CMD_PARAM_INVALID 		= COMMAND_PARAM_INVALID					// Invalid value for parameter in instruction
 	// ... add more here
 } CMD_ReturnStatus;
 
@@ -160,7 +162,7 @@ const command_t* GetCommand(uint8_t instruction_number);
  *                opcode[0] --> buffer number (4 MSb), CAM number (4 LSb)
  *                opcode[1] --> Use black filtering? 0 = no, 1 = yes
  *                opcode[2] --> photo tries if black filtering enabled, otherwise unused
- *                opcode[3] --> black fraction for filtering if enabled, otherwise unused
+ *                opcode[3] --> black fraction for filtering if enabled, otherwise unused, Values possible are 0-200 (each is 0.5% of total pixels)
  *                opcode[4] --> unused for CMD_TakePicture
  *
  *                Example: take a single pic with CAM B and save in BUFFER 0
@@ -171,6 +173,7 @@ const command_t* GetCommand(uint8_t instruction_number);
  *         CMD_CAM_BOOT_ERROR if the selected camera fails to initialize, or if
  *         cam_number is invalid (not 0 or 1).
  *         CMD_CAM_DCMI_ERROR if Photo_CaptureRaw() fails.
+ *         CMD_INVALID_PARAM if black fraction is higher than allowed value (200).
  ********************************************************************************/
 CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode);
 
@@ -270,7 +273,7 @@ CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode);
 /********************************************************************************
  * @brief  Changes a configurable camera parameter shared by both CAMs.
  *
- * @note   UNTESTED. Currently only index 0 (ae_rule_algo_val) is implemented.
+ * @note   UNTESTED. Currently (black_threshold, ae_rule_algo_val) is implemented.
  *         TODO: add other parameters as needed; if added, update this comment
  *         to document each new index.
  *

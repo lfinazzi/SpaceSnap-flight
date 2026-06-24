@@ -83,10 +83,13 @@ typedef struct {
     uint32_t  mcu_temp;								// MCU Temp reading of MCU with ADC
     uint32_t  vrefint;								// VREF reading of MCU with ADC
 
+    // Photo taking params
+    cam_params_t cam_params;						// Parameters that can be changed for photo capturing, all have default values, but can be changed
+
 } board_status_t;
 
 typedef char board_status_t_size[	// Static assert to be sure to erase FRAM after changing board_status_t struct
-    (sizeof(board_status_t) == 72) ? 1 : -1
+    (sizeof(board_status_t) == 76) ? 1 : -1
 ];
 
 

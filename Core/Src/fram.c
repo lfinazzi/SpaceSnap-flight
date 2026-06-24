@@ -142,6 +142,10 @@ void EraseFRAM(void)
 	board_status.compression_ptr_address = PHOTO_DATA_START;		// point compression_ptr to the correct address (first address)
 	board_status.fram_bytes_left = FIRMWARE_BACKUP_START - board_status.compression_ptr_address;		// All bytes available
 
+	// Default cam parameter values
+	board_status.cam_params.black_threshold = BLACK_THRESHOLD_DEFAULT;
+	board_status.cam_params.ae_rule_algo_val = AE_DEFAULT;
+
 	Log("FRAM erase complete\r\n");
 	return;
 }

@@ -144,9 +144,6 @@ int main(void)
   // Wait for next inits
   HAL_Delay(10);
 
-  // Init cam params
-  InitCamParams();																	// Initializes changable default CAM params
-
   // Loads board status saved in FRAM
   LoadBoardStatusFRAM();
   board_status.uptime_total += board_status.uptime_session / 1000;						// Loads the previous uptime to the total_uptime variable

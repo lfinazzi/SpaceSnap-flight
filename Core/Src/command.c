@@ -82,19 +82,22 @@ void ReturnCode(CMD_ReturnStatus st)
 		tx_buffer[1] = COMMAND_CAM_DCMI_ERROR;
 	}
 	else if (st == CMD_COMPRESS_ERROR) {
-			tx_buffer[1] = COMMAND_COMPRESS_ERROR;
+		tx_buffer[1] = COMMAND_COMPRESS_ERROR;
 	}
 	else if (st == CMD_FRAM_FULL) {
-			tx_buffer[1] = COMMAND_FRAM_FULL;
+		tx_buffer[1] = COMMAND_FRAM_FULL;
 	}
 	else if (st == CMD_BUFFER_INVALID) {
-			tx_buffer[1] = COMMAND_BUFFER_INVALID;
+		tx_buffer[1] = COMMAND_BUFFER_INVALID;
 	}
 	else if (st == CMD_INDEX_FULL) {
-			tx_buffer[1] = COMMAND_INDEX_FULL;
+		tx_buffer[1] = COMMAND_INDEX_FULL;
 	}
 	else if (st == CMD_CONFIRM_FAILED) {
-			tx_buffer[1] = COMMAND_CONFIRM_FAILED;
+		tx_buffer[1] = COMMAND_CONFIRM_FAILED;
+	}
+	else if (st == CMD_PARAM_INVALID) {
+		tx_buffer[1] = COMMAND_PARAM_INVALID;
 	}
 	// when implementing Commands, different runtime errors are handled here! Add accordingly.
 }
@@ -137,7 +140,7 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
  * opcode[0] --> buffer number (4 MSb), CAM number (4 lsb)
  * opcode[1] --> Use black filtering? 0 if no, 1 if yes
  * opcode[2] --> photo tries if black filtering enabled. Otherwise unused
- * opcode[3] --> black threshold for filtering if enabled. Otherwise unised
+ * opcode[3] --> black fraction for filtering if enabled. Otherwise unused: Values possible are 0-200 (each is 0.5% of total pixels)
  * opcode[4] --> Unused for CMD_TakePicture
  *
  * Take a single pic with CAM N (0 for A, 1 for B) and save in BUFFER 0 with opcode: 0N 00 00 00 00
@@ -156,6 +159,11 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	if (buffer_number >= RAW_PHOTO_COUNT) {
 		Log("Invalid buffer number!\r\n");
 		return CMD_BUFFER_INVALID;
+	}
+
+	if (black_fraction > 200) {
+		Log("Allowed values for black fraction are 0-200!\r\n");
+		return CMD_PARAM_INVALID;
 	}
 
 	sprintf(log_buf, "cam=%d buf=%d filter=%d tries=%d threshold=%d\r\n",
@@ -376,6 +384,9 @@ CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode)
 	CMD_ReturnStatus ret = CMD_OK;
 	switch(idx) {
 	case 0:
+		cam_params.black_threshold = value;
+		break;
+	case 1:
 		cam_params.ae_rule_algo_val = value;			// add new params here
 		break;
 	default:
