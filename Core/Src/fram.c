@@ -144,7 +144,10 @@ void EraseFRAM(void)
 
 	// Default cam parameter values
 	board_status.cam_params.black_threshold = BLACK_THRESHOLD_DEFAULT;
-	board_status.cam_params.ae_rule_algo_val = AE_DEFAULT;
+	board_status.cam_params.sensor_analog_gain = GAIN_ANALOG_DEFAULT;
+	board_status.cam_params.sensor_digital_gain = GAIN_DIGITAL_DEFAULT;
+	board_status.cam_params.sensor_coarse_exposure = EXPOSURE_COARSE_DEFAULT;
+	board_status.cam_params.sensor_fine_exposure = EXPOSURE_FINE_DEFAULT;
 
 	Log("FRAM erase complete\r\n");
 	return;

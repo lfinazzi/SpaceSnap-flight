@@ -178,7 +178,7 @@ int main(void)
 			  }
 			  break;
 
-		  case STATE_IGNORE:														// TODO: untested as of today because GPIO reset doensn't work
+		  case STATE_IGNORE:		// TODO INTEGRATION: Test with LS02 hardware, select if we will use pulldowns or not for signaling GPIOs
 
 			  if(ignore_flag == 0)													// Only transmit buffer first time this is executed
 			  {
@@ -189,7 +189,7 @@ int main(void)
 			  }
 
 			  // Waiting for HW reset from LS02 - Using non-blocking (no while) - or timeout
-			  if(PollUSSReset() || HAL_GetTick() - timeout_start >= (uint32_t)IGNORE_TIMEOUT_MAX){    // GPIO reset high --> reactivate reception (or timeout)
+			  if(PollUSSReset() || (HAL_GetTick() - timeout_start >= (uint32_t)IGNORE_TIMEOUT_MAX)){    // GPIO reset high --> reactivate reception (or timeout)
 				  Log("Leaving IGNORE mode.\r\n");
 				  Log("---------------------------------------------------\r\n");
 				  rx_flag = 0; 															// to avoid receiving something while blocked
@@ -209,7 +209,7 @@ int main(void)
 			  break;
 
 		  // **************************************************************************************************************************************************
-		  // Only the CMD_TakePictureDelayed() can make the program reach this state
+		  // Only the CMD_TakePictureDelayed() can make the program reach this state, TODO: Think of a way for this state to be recovered in case of unwanted power off
 		  case STATE_DELAYED_PICTURE:
 			  if(delayed_flag == 0)									// Only transmit buffer first time this is executed
 			  {

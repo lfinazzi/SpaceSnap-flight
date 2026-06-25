@@ -151,7 +151,8 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 
 	uint8_t cam_number 		= opcode[0] & 0x0F;					// 0000_1111 mask,
 	uint8_t buffer_number 	= (opcode[0] & 0xF0) >> 4;	    	// 1111_0000 mask, upper nibble
-	uint8_t filter_flag 	= opcode[1];
+	uint8_t filter_flag 	= opcode[1] & 0x0F;					// 0000_1111 mask,
+	uint8_t advanced_flag 	= (opcode[1] & 0xF0) >> 4;			// 1111_0000 mask, upper nibble
 	uint8_t tries 		 	= opcode[2];
 	uint8_t black_fraction  = opcode[3];
 	// opcode 4 unused here
@@ -166,14 +167,23 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 		return CMD_PARAM_INVALID;
 	}
 
-	sprintf(log_buf, "cam=%d buf=%d filter=%d tries=%d threshold=%d\r\n",
+	sprintf(log_buf, "cam=%d buf=%d filter=%d tries=%d fraction=%d\r\n",
 	        cam_number, buffer_number, filter_flag, tries, black_fraction);
 	Log(log_buf);
 
+	HAL_StatusTypeDef ret;
 	if(cam_number == 0){
 		ActivateCAMA();
 
-		HAL_StatusTypeDef ret = CAM_Init(CAM_I2C_ADDR_A);
+		if (advanced_flag == 0)	{	// basic mode
+			Log("BASIC MODE SELECTED FOR CAM A\r\n");
+			ret = CAM_Init(CAM_I2C_ADDR_A);
+		}
+		else {	// advanced mode
+			Log("ADVANCED MODE SELECTED FOR CAM A\r\n");
+			ret = CAM_InitAdvanced(CAM_I2C_ADDR_A);
+		}
+
 		if(ret != HAL_OK)
 		{
 			sprintf(log_buf, "Camera A init FAILED, ret=%d\r\n", ret);
@@ -207,7 +217,15 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	else if(cam_number == 1){
 		ActivateCAMB();
 
-		HAL_StatusTypeDef ret = CAM_Init(CAM_I2C_ADDR_B);
+		if (advanced_flag == 0)	{	// basic mode
+			Log("BASIC MODE SELECTED FOR CAM B\r\n");
+			ret = CAM_Init(CAM_I2C_ADDR_B);
+		}
+		else {	// advanced mode
+			Log("ADVANCED MODE SELECTED FOR CAM B\r\n");
+			ret = CAM_InitAdvanced(CAM_I2C_ADDR_B);
+		}
+
 		if(ret != HAL_OK)
 		{
 			sprintf(log_buf, "Camera B init FAILED, ret=%d\r\n", ret);
@@ -292,10 +310,10 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
 {
     board_status.uptime_session = HAL_GetTick();
 
-    _Static_assert(sizeof(board_status_t) + sizeof(fw_backup_info_t) <= AIRMAC_SIZE - HEADER_SIZE, "board_status_t too large for tx_buffer");	// static assert for airmac_board_status_t size
+    _Static_assert(sizeof(board_status_t) + sizeof(fw_backup_info_t) <= AIRMAC_SIZE - DATA_HEADER_SIZE, "board_status_t too large for tx_buffer");	// static assert for airmac_board_status_t size
 
-    memcpy(&tx_buffer[HEADER_SIZE], &board_status, sizeof(board_status_t));		// outputs the abridged board status to the tx_buffer
-    memcpy(&tx_buffer[HEADER_SIZE + sizeof(board_status_t)], &fw_backup_info, sizeof(fw_backup_info_t));	// outputs the fw backup info to the tx_buffer
+    memcpy(&tx_buffer[DATA_HEADER_SIZE], &board_status, sizeof(board_status_t));		// outputs the abridged board status to the tx_buffer
+    memcpy(&tx_buffer[DATA_HEADER_SIZE + sizeof(board_status_t)], &fw_backup_info, sizeof(fw_backup_info_t));	// outputs the fw backup info to the tx_buffer
     LogBoardStatusFull();		// Outputs a summary of the board status to UART4 (debug) for human viewing
 
     // No need to log the instr + opcode, as this gives board status with that info
@@ -384,10 +402,26 @@ CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode)
 	CMD_ReturnStatus ret = CMD_OK;
 	switch(idx) {
 	case 0:
-		cam_params.black_threshold = value;
+		board_status.cam_params.black_threshold = BLACK_THRESHOLD_DEFAULT;
+		board_status.cam_params.sensor_analog_gain = GAIN_ANALOG_DEFAULT;
+		board_status.cam_params.sensor_digital_gain = GAIN_DIGITAL_DEFAULT;
+		board_status.cam_params.sensor_coarse_exposure = EXPOSURE_COARSE_DEFAULT;
+		board_status.cam_params.sensor_fine_exposure = EXPOSURE_FINE_DEFAULT;
 		break;
 	case 1:
-		cam_params.ae_rule_algo_val = value;			// add new params here
+		board_status.cam_params.black_threshold  = value;
+		break;
+	case 2:
+		board_status.cam_params.sensor_analog_gain  = value;
+		break;
+	case 3:
+		board_status.cam_params.sensor_digital_gain  = value;
+		break;
+	case 4:
+		board_status.cam_params.sensor_coarse_exposure  = value;
+		break;
+	case 5:
+		board_status.cam_params.sensor_fine_exposure  = value;			// add new params here
 		break;
 	default:
 		ret = CMD_ERROR;

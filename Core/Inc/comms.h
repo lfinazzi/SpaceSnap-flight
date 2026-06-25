@@ -98,7 +98,6 @@ void TransmitBufferRS485(void);
  *         Called automatically by TransmitBufferRS485() after each
  *         transmission to restore the LS-02 to its listening state.
  *
- *         TODO: Behavior unverified, to test on integration with LS-02 hardware
  ********************************************************************************/
 void ResetLS02(void);
 
@@ -176,12 +175,6 @@ void EnableListenRS485(void);
 
 /********************************************************************************
  * @brief  Polls the USS RS-485 reset GPIO (PA8) and returns its current state.
- *
- * @note   TODO: This function does not currently work as expected. The STM32
- *         is unable to read PA8 as HIGH when driven externally. Root cause
- *         not yet identified -- possible GPIO configuration issue (input mode,
- *         pull-up/pull-down, or pin conflict). Do not rely on this function
- *         until the hardware bring-up issue is resolved.
  *
  * @return 0 if PA8 is low.
  *         1 if PA8 is high.

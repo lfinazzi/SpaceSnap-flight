@@ -5,9 +5,9 @@
 #include "main.h"
 #include "status.h"
 
-#define BOARD_STATUS_START 				(0x000000)							// Address to save board status
+#define BOARD_STATUS_START 				(0x000000)													// Address to save board status
 
-#define COMPRESSION_TABLE_START 		((BOARD_STATUS_START) + (sizeof(board_status_t)))		// compressed space starts after status information, which starts at 0x00000000
+#define COMPRESSION_TABLE_START 		((BOARD_STATUS_START) + (sizeof(board_status_t)))			// compressed space starts after status information, which starts at 0x00000000
 
 #define PHOTO_DATA_START				((COMPRESSION_TABLE_START) + ((sizeof(compression_index_entry_t))*(MAX_COMPRESSED_PHOTOS)))		// Space for compressions
 
@@ -20,12 +20,12 @@
 #define FIRMWARE_IMAGE_START            ((FIRMWARE_BACKUP_START) + (sizeof(fw_backup_info_t)))
 
 // Pin PB12
-#define FRAM_CS_LOW()   	HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_RESET)
-#define FRAM_CS_HIGH()  	HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_SET)
+#define FRAM_CS_LOW()   				HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_RESET)
+#define FRAM_CS_HIGH()  				HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_SET)
 
-#define FRAM_CMD_WREN   	(0x06U)  	// Write Enable
-#define FRAM_CMD_WRITE  	(0x02U)  	// Write Memory
-#define FRAM_CMD_READ   	(0x03U)  	// Read Memory
+#define FRAM_CMD_WREN   				(0x06U)  	// Write Enable
+#define FRAM_CMD_WRITE  				(0x02U)  	// Write Memory
+#define FRAM_CMD_READ   				(0x03U)  	// Read Memory
 
 
 /********************************************************************************

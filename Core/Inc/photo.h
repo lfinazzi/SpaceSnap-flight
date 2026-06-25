@@ -18,8 +18,13 @@
 #define CAM_I2C_TIMEOUT			(100U)		  	// Timeout for I2C2
 #define DCMI_TIMEOUT 			(500U)			// Timeout for DCMI interface, expected transfer time is approx 20 ms
 
-#define BLACK_THRESHOLD_DEFAULT	(uint16_t)(32U)	// Min. intensity to consider a pixel non-dark (out of 256), default value, TODO: Verify this taking a picture with lens cap on
-#define AE_DEFAULT				(uint16_t)(3U)	// Default algorithm for auto-exposure
+// These settings give ~18-19 counts for black pixels (lens cap on)
+// TODO TEST: These settings must be determined when testing under representative conditions
+#define BLACK_THRESHOLD_DEFAULT	(24U)			// Min. intensity to consider a pixel non-dark (out of 256), default value
+#define GAIN_ANALOG_DEFAULT		(128U)			// Default sensor analog gain for advanced mode, 32 is unity
+#define GAIN_DIGITAL_DEFAULT	(128U)			// Default sensor digital gain for advanced mode, 128 is unity
+#define EXPOSURE_COARSE_DEFAULT	(4U)			// Default sensor exposure for advanced mode, each count is PAL freq (@ 54 MHz) * 13.5 MHz / 54 MHz = 256.0 us (PAL)
+#define EXPOSURE_FINE_DEFAULT	(0U)			// Default sensor exposure for advanced mode, each count is 1 / 13.5 MHz = 0.074 us per clock (PAL or NTSC)
 
 typedef struct __attribute__((packed)){
 	uint16_t designator;			  			// global raw photo number taken
@@ -37,7 +42,10 @@ typedef char static_assert_raw_photo_t_size[	// Static assert that a complete ph
 
 typedef struct __attribute__((packed)) {
 	uint16_t black_threshold;					// Threshold to consider a pixel black with black filtering enabled
-	uint16_t ae_rule_algo_val; 					// Algorithm for auto exposure
+	uint16_t sensor_analog_gain; 				// Fixed analog gain for advanced mode
+	uint16_t sensor_digital_gain; 				// Fixed digital gain for advanced mode
+	uint16_t sensor_coarse_exposure;			// Coarse exposure for advanced mode
+	uint16_t sensor_fine_exposure;			// Fine exposure for advanced mode
 } cam_params_t;									// These settings are the ones that can be changed for CameraParams
 // On adding more methods, remember to initialize with default macro values and add in CMD_ChangeCamParams() to be able to change them
 
@@ -277,7 +285,7 @@ HAL_StatusTypeDef CAM_ReadReg(uint8_t i2c_addr, uint16_t reg, uint16_t *val);
 
 /********************************************************************************
  * @brief  Initialises the ASX340AT camera sensor for YCbCr 4:2:2 progressive
- *         output on the parallel digital port.
+ *         output on the parallel digital port (640 x 480).
  *
  * @note   Configures the sensor in two active Change-Config stages:
  *
@@ -294,16 +302,13 @@ HAL_StatusTypeDef CAM_ReadReg(uint8_t i2c_addr, uint16_t reg, uint16_t *val);
  *                            PIXCLK (required for STM32 DCMI hardware sync)
  *           0x001E = 0x0200  Pad slew rate control (takes effect immediately,
  *                            no Change-Config required)
- *           0xC85E = 0x02D0  720 active pixels
+ *           0xC85E = 0x02D0  720 active pixels (this is not a mistake, image still outputs in 640 x 480)
  *           0xC860 = 0x0000  Zero pixel offset
  *
  *         After Stage 2, performs a full register readback verification and
  *         logs AWB runtime gains (0xAC12, 0xAC14) and color temperature
  *         (0xC8E6) as diagnostics. Waits 500ms for AE/AWB convergence before
  *         returning.
- *
- *         Stages 3 (AE configuration) and 4 (AWB state reset) are currently
- *         commented out pending testing.
  *
  *         Must be called after ActivateCAMx() has completed. Returns HAL_ERROR
  *         immediately if the device ID readback does not match 0x2285.
@@ -316,6 +321,73 @@ HAL_StatusTypeDef CAM_ReadReg(uint8_t i2c_addr, uint16_t reg, uint16_t *val);
  *         HAL_TIMEOUT if any Change-Config doorbell poll times out.
  ********************************************************************************/
 HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr);
+
+
+/********************************************************************************
+ * @brief  Initialises the ASX340AT camera sensor for YCbCr 4:2:2 progressive
+ *         output on the parallel digital port (640 x 480) with manual exposure
+ *         and gain control.
+ *
+ * @note   Extends CAM_Init() with one additional configuration stages:
+ *
+ *         Stage 1 — Scan mode, orientation, and flicker avoidance:
+ *           0x9826 = 0x0025  PAL progressive preset for VGA parallel output
+ *           0xC858 = 0x0009  VGA50 progressive scan (50fps, EU mains)
+ *           0xC838 = 0x0000  No image flip or mirror (override Auto-Config
+ *                            floating GPIO sampling)
+ *           0xC881 = 0x0032  50Hz flicker avoidance (EU/ARG mains)
+ *
+ *         Stage 2 — Output format, parallel port, FOV alignment:
+ *           0xC96C = 0x0000  YCbCr 4:2:2 UYVY output format
+ *           0xC972 = 0x0005  Parallel port enabled, progressive, continuous
+ *                            PIXCLK (required for STM32 DCMI hardware sync)
+ *           0x001E = 0x0200  Pad slew rate control (takes effect immediately,
+ *                            no Change-Config required)
+ *           0xC85E = 0x02D0  720 active pixels (image still outputs at 640x480)
+ *           0xC860 = 0x0000  Zero pixel offset
+ *
+ *         Stage 3 — Manual exposure and gain (no Change-Config required):
+ *           0xA804 = 0x0000  Full manual exposure (AE track disabled). Host
+ *                            controls integration times and gains directly.
+ *           0xC83A = cam_params.sensor_analog_gain   Analog gain (unity = 32).
+ *                            Range 0.5–16x. Applied before ADC; does not
+ *                            amplify quantisation noise.
+ *           0xC84C = cam_params.sensor_digital_gain  Second digital gain
+ *                            (unity = 128). Applied after ADC; use only if
+ *                            analog gain headroom is exhausted.
+ *           0xC840 = cam_params.sensor_coarse_exposure  Coarse integration
+ *                            time in line periods. Each line = 256 µs at
+ *                            13.5 MHz PIXCLK (PAL, 3906.25 Hz line rate).
+ *                            Coarse = 1 → 256 µs. Keep below 4 lines (1 ms)
+ *                            to avoid motion blur at LEO ground speeds.
+ *           0xC842 = cam_params.sensor_fine_exposure  Fine integration time
+ *                            in pixel clocks (1 clock = 0.074 µs at 13.5 MHz).
+ *                            Use to tune exposure between coarse steps.
+ *                            Max value = line_length_pck - 1 = 3455 clocks.
+ *
+ *         All gain and exposure values are read from board_status.cam_params,
+ *         which is persisted in FRAM and updated via ground command. Default
+ *         values on first boot: analog_gain = 32 (1x), digital_gain = 128
+ *         (1x), coarse_exposure = 2 (512 µs), fine_exposure = 0.
+ *
+ *         After Stage 3, performs a full register readback verification
+ *         including all exposure and gain registers, and logs AWB runtime
+ *         gains (0xAC12, 0xAC14) and color temperature (0xC8E6) as
+ *         diagnostics. Waits 500ms for AWB convergence before returning.
+ *         Note: AE convergence delay is not required since AE is disabled,
+ *         but the delay is retained for AWB stability.
+ *
+ *         Must be called after ActivateCAMx() has completed. Returns HAL_ERROR
+ *         immediately if the device ID readback does not match 0x2285.
+ *
+ * @param  i2c_addr   8-bit shifted I2C address of the target sensor.
+ *                    Use CAM_I2C_ADDR_A (0xBA) or CAM_I2C_ADDR_B (0x90).
+ *
+ * @return HAL_OK on success.
+ *         HAL_ERROR if device ID mismatch on entry.
+ *         HAL_TIMEOUT if any Change-Config doorbell poll times out.
+ ********************************************************************************/
+HAL_StatusTypeDef CAM_InitAdvanced(uint8_t i2c_addr);
 
 
 /********************************************************************************

@@ -157,10 +157,10 @@ int PollUSSReset(void)
 	// Raw GPIO
 	GPIO_PinState raw = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8);
 	if (raw == GPIO_PIN_RESET) {
-		return 0;  // Pin is low, don't even start debounce
+		return 0;   // Pin is low
 	}
 	else
-		return 1;
+		return 1;	// pin is high
 }
 
 void LogRawFrameDebug(uint8_t slot, uint32_t offset, uint32_t frame_size,

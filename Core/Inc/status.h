@@ -50,7 +50,6 @@ typedef struct {
 
     // VOLATILE - Gets updated on every boot
     uint8_t last_reset_cause;
-    //uint16_t last_fault_pc;						// TODO: This needs a special linker script to be loaded correctly on next startup before it is stepped by MCU
 
     // memory ok? VOLATILE
     uint8_t fram_ok;					 			// FRAM init ok
@@ -89,7 +88,7 @@ typedef struct {
 } board_status_t;
 
 typedef char board_status_t_size[	// Static assert to be sure to erase FRAM after changing board_status_t struct
-    (sizeof(board_status_t) == 76) ? 1 : -1
+    (sizeof(board_status_t) == 84) ? 1 : -1
 ];
 
 

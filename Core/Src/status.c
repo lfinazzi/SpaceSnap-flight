@@ -137,7 +137,7 @@ void LogBoardStatusFull(void)
 
 	// ADC readings
 
-	float vdda_actual = VREFINT_CAL * (ADC_MAX_VALUE / (float)board_status.vrefint);		// TODO: Implement temperature correction?
+	float vdda_actual = VREFINT_CAL * (ADC_MAX_VALUE / (float)board_status.vrefint);
 	sprintf(log_buf, "VDD: %.3f V\r\n", vdda_actual);
 	Log(log_buf);
 
@@ -159,10 +159,19 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "Black threshold: %u\r\n", board_status.cam_params.black_threshold);
 	Log(log_buf);
 
-	sprintf(log_buf, "Auto exposure algorithm preset: %u\r\n", board_status.cam_params.ae_rule_algo_val);
+	sprintf(log_buf, "Sensor analog gain (advanced, 32 is unity): %u\r\n", board_status.cam_params.sensor_analog_gain);
 	Log(log_buf);
 
-	sprintf(log_buf, "AirMac frame budget: %u/%u\r\n", sizeof(board_status_t) + sizeof(fw_backup_info_t), AIRMAC_SIZE);
+	sprintf(log_buf, "Sensor digital gain (advanced, 128 is unity): %u\r\n", board_status.cam_params.sensor_digital_gain);
+	Log(log_buf);
+
+	float exp_time = ((float)board_status.cam_params.sensor_coarse_exposure / 3906.25f		// Assumes PIXCLK of 13.5 MHz!
+            		+ (float)board_status.cam_params.sensor_fine_exposure / 13500000.0f)
+            		* 1000000.0f;
+	sprintf(log_buf, "Exposure time (advanced): %.1f us\r\n", exp_time);
+	Log(log_buf);
+
+	sprintf(log_buf, "AirMac frame budget: %u/%u\r\n", sizeof(board_status_t) + sizeof(fw_backup_info_t) + DATA_HEADER_SIZE, AIRMAC_SIZE);
 	Log(log_buf);
 
 	return;

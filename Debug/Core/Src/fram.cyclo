@@ -5,7 +5,7 @@
 ../Core/Src/fram.c:80:6:SaveBoardStatusFRAM	3
 ../Core/Src/fram.c:98:6:LoadBoardStatusFRAM	4
 ../Core/Src/fram.c:130:6:EraseFRAM	2
-../Core/Src/fram.c:164:6:SaveBufferFRAM	2
-../Core/Src/fram.c:192:6:ReadBufferFRAM	1
-../Core/Src/fram.c:206:6:EraseCompressions	2
-../Core/Src/fram.c:225:6:SaveFRAM_Unlocked	2
+../Core/Src/fram.c:167:6:SaveBufferFRAM	2
+../Core/Src/fram.c:195:6:ReadBufferFRAM	1
+../Core/Src/fram.c:209:6:EraseCompressions	2
+../Core/Src/fram.c:228:6:SaveFRAM_Unlocked	2

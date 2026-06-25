@@ -273,13 +273,15 @@ CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode);
 /********************************************************************************
  * @brief  Changes a configurable camera parameter shared by both CAMs.
  *
- * @note   UNTESTED. Currently (black_threshold, ae_rule_algo_val) is implemented.
- *         TODO: add other parameters as needed; if added, update this comment
- *         to document each new index.
+ * @note   Currently (black_threshold, gain (analog and digital,
+ * 		   coarse and fine exposure) are implemented.
+ *
+ *         Add other parameters as needed.
  *
  *         Selects which parameter to modify via opcode[0], and writes the
  *         16-bit value reconstructed from opcode[1:2] (big-endian) into the
- *         corresponding field in cam_params.
+ *         corresponding field in cam_params. Idx 0 is reserved to put all
+ *         parameters to default values.
  *
  * @note   Calls PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
