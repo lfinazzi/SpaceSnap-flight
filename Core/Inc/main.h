@@ -130,10 +130,6 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
-extern HAL_StatusTypeDef ret;			// Saves return of HAL calls
-extern app_state_t state;				// Saves current execution state
-
-
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : photo.c
+  * @brief          : Camera driver — image capture, JPEG compression, and SRAM transfer
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #include "photo.h"
 #include "comms.h"
 #include "main.h"
@@ -10,13 +19,8 @@ extern TIM_HandleTypeDef htim11;
 extern DCMI_HandleTypeDef hdcmi;
 extern IWDG_HandleTypeDef hiwdg;
 
-//DMA_HandleTypeDef hdma_dcmi;
-
 volatile uint8_t dcmi_frame_ready 	= 0;   // set by callback, cleared by main
 volatile uint8_t dcmi_error       	= 0;   // set on DCMI error
-
-uint8_t current_metadata_slot;			// Variable that holds current free slot in SRAM for metadata of compressed images
-uint32_t current_data_address_sram;		// Variable that holds the address in SRAM for next compressed write
 
 void CAM_ResetAssert(void)
 {

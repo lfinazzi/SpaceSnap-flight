@@ -3,6 +3,7 @@
  *
  * Tiny JPEG Encoder — stripped and modified for STM32 embedded use
  *  - Original: Sergio Gonzalez (public domain)
+ *  - Modified: Lucas Finazzi
  *  - Modifications: UYVY input, 16-bit NOR SRAM write, restart markers
  *
  * Features:

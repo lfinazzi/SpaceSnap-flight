@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : fram.c
+  * @brief          : FRAM driver — persistent storage read/write via SPI
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #include "fram.h"
 
 extern SPI_HandleTypeDef hspi2;
@@ -142,12 +151,20 @@ void EraseFRAM(void)
 	board_status.compression_ptr_address = PHOTO_DATA_START;		// point compression_ptr to the correct address (first address)
 	board_status.fram_bytes_left = FIRMWARE_BACKUP_START - board_status.compression_ptr_address;		// All bytes available
 
+	board_status.state = STATE_IDLE;
+
 	// Default cam parameter values
 	board_status.cam_params.black_threshold = BLACK_THRESHOLD_DEFAULT;
 	board_status.cam_params.sensor_analog_gain = GAIN_ANALOG_DEFAULT;
 	board_status.cam_params.sensor_digital_gain = GAIN_DIGITAL_DEFAULT;
 	board_status.cam_params.sensor_coarse_exposure = EXPOSURE_COARSE_DEFAULT;
 	board_status.cam_params.sensor_fine_exposure = EXPOSURE_FINE_DEFAULT;
+
+	// Default delayed photo burst parameter values
+	board_status.delayed_params.num_photos = BURST_NUM_PHOTOS;
+	board_status.delayed_params.time_between_photos = BURST_INTERVAL;
+	board_status.delayed_params.perform_compressions = BURST_COMPRESSION;
+	board_status.delayed_params.compression_quality = BURST_COMPR_QUALITY;
 
 	Log("FRAM erase complete\r\n");
 	return;

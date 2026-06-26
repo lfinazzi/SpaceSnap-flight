@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : telemetry.h
+  * @brief          : Telemetry interface — response frame encoding declarations
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #ifndef __TELEMETRY_H__
 #define __TELEMETRY_H__
 

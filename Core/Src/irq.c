@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : irq.c
+  * @brief          : Interrupt handlers — UART and DCMI callback implementations
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #include "irq.h"
 
 extern UART_HandleTypeDef huart1;

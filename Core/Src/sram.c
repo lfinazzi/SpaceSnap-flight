@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : sram.c
+  * @brief          : SRAM driver — external NOR SRAM interface for image storage
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #include "sram.h"
 #include "status.h"
 #include "comms.h"

@@ -1,7 +1,17 @@
+/**
+  ******************************************************************************
+  * @file           : command.h
+  * @brief          : Command dispatch interface — opcodes, table, and shared state
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #ifndef __COMMAND_H__
 #define __COMMAND_H__
 
 #include <stdint.h>
+#include "fw_version.h"
 
 #define HAS_OPCODE 									(1U) 		// Command has opcode
 #define NO_OPCODE 									(0U) 		// Command has no opcode
@@ -32,7 +42,6 @@
 extern uint32_t picture_delay_start;							// Moment the delayed photo instruction was executed
 extern uint8_t picture_delay_mins;								// Amount of N-minute intervals to take a delayed photo
 extern uint8_t delayed_flag;									// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
-extern uint8_t ignore_flag;										// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
 
 
 // Definition of command IDs, starting at 0x33 are mission commands, starting at 0x11 are debug commands, 0x88 start of danger zone command
@@ -46,6 +55,7 @@ typedef enum {
 	CMD_SEND_RAW_HEADER_ID,		   // 0x39
 	CMD_SEND_COMP_HEADER_ID,	   // 0x3A
 	CMD_GET_STATUS_ID,             // 0x3B
+	CMD_CHANGE_BURST_PARAMS_ID,    // 0x3C
 
 	CMD_DUMP_RAW_ID        			= 0x11,
 	CMD_DUMP_COMPRESSED_ID 			= 0x12,
@@ -179,7 +189,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode);
 
 
 /********************************************************************************
- * @brief  Schedules a delayed photo capture after N x MIN_INTERVAL minutes.
+ * @brief  Schedules delayed photo captures after N x MIN_INTERVAL minutes.
  *
  * @note   Reads the delay count from opcode[4], records HAL_GetTick() as the
  *         start time, and writes COMMAND_SCHEDULED + the delay count into
@@ -188,6 +198,12 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode);
  *
  * @note   Calls PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
+ *
+ * @note   This command schedules delayed photos (up to 5, due to raw buffer
+ * 		   limitations), separated by configurable time and also has the option
+ * 		   to compress and save this pictures in FRAM automatically. The settings
+ * 		   for these burst captures are found in board_status.delayed_params.
+ *
  *
  * @param  opcode Pointer to a 5-byte opcode array:
  *                opcode[0:3] --> same as CMD_TakePicture
@@ -583,6 +599,22 @@ CMD_ReturnStatus CMD_DumpAllFRAM(uint8_t *opcode);
  *                            computed CRC.
  ********************************************************************************/
 CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Changes configurable burst parameters for taking many pictures
+ * 		   with CMD_TakePictureDelayed().
+ *
+ * @param  opcode opcode[0]: 0x01 to reset defaults, 0x00 to modify burst params
+ *                opcode[1]: number of burst photos
+ *                opcode[2]: time in seconds between photos
+ *                opcode[3]: perform compressions?
+ *                opcode[4]: compression quality
+ *
+ * @return CMD_OK if valid parameters.
+ *         CMD_INVALID_PARAMS if invalid parameter is desired.
+ ********************************************************************************/
+CMD_ReturnStatus CMD_ChangeBurstParams(uint8_t *opcode);
 
 
 // Command Table definition lives in command.c — add new entries there

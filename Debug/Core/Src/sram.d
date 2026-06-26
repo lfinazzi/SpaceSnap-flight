@@ -1,5 +1,5 @@
 Core/Src/sram.o: ../Core/Src/sram.c ../Core/Inc/sram.h \
- ../Core/Inc/photo.h ../Core/Inc/command.h \
+ ../Core/Inc/photo.h ../Core/Inc/command.h ../Core/Inc/fw_version.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h \
  ../Core/Inc/stm32f2xx_hal_conf.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_rcc.h \
@@ -42,6 +42,7 @@ Core/Src/sram.o: ../Core/Src/sram.c ../Core/Inc/sram.h \
 ../Core/Inc/sram.h:
 ../Core/Inc/photo.h:
 ../Core/Inc/command.h:
+../Core/Inc/fw_version.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h:
 ../Core/Inc/stm32f2xx_hal_conf.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_rcc.h:

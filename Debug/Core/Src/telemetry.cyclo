@@ -1,2 +1,2 @@
-../Core/Src/telemetry.c:8:6:CheckResetCause	6
-../Core/Src/telemetry.c:44:6:Read_MCU_ADC_Vals	1
+../Core/Src/telemetry.c:17:6:CheckResetCause	6
+../Core/Src/telemetry.c:53:6:Read_MCU_ADC_Vals	1

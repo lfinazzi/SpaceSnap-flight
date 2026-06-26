@@ -1,6 +1,6 @@
 Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
- ../Core/Inc/command.h ../Core/Inc/fram.h ../Core/Inc/main.h \
- ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h \
+ ../Core/Inc/command.h ../Core/Inc/fw_version.h ../Core/Inc/fram.h \
+ ../Core/Inc/main.h ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h \
  ../Core/Inc/stm32f2xx_hal_conf.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_rcc.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_def.h \
@@ -40,6 +40,7 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
  ../Core/Inc/telemetry.h ../Core/Inc/comms.h ../Core/Inc/main.h
 ../Core/Inc/status.h:
 ../Core/Inc/command.h:
+../Core/Inc/fw_version.h:
 ../Core/Inc/fram.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h:

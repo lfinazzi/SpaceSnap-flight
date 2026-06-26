@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : status.c
+  * @brief          : System status management — telemetry logging and board state
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #include "status.h"
 #include "comms.h"
 #include "main.h"
@@ -6,13 +15,6 @@
 board_status_t board_status = {0};
 compression_index_entry_t compression_table[MAX_COMPRESSED_PHOTOS] = {0};		// Compression table in FRAM
 fw_backup_info_t fw_backup_info;		// unmodified on init on purpose, nothing can write this value except CMD_BackupFirmware()
-
-uint32_t timestamp = 0;
-uint32_t total_seconds = 0;
-char timestamp_string[15] = {0};
-uint32_t hours = 0;
-uint32_t minutes = 0;
-uint32_t seconds = 0;
 
 
 void UpdateStatus(void)
@@ -150,6 +152,10 @@ void LogBoardStatusFull(void)
 	Log(log_buf);
 
 	sprintf(log_buf, "CRC of application in FRAM: 0x%06lX\r\n", fw_backup_info.fw_backup_crc32);
+	Log(log_buf);
+
+	sprintf(log_buf, "Version of application in FRAM: %lu.%lu\r\n",
+						fw_backup_info.fw_backup_version & 0xFFFF0000, fw_backup_info.fw_backup_version & 0x0000FFFF);
 	Log(log_buf);
 
 	// Cam parameters in memory

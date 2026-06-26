@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : comms.c
+  * @brief          : RS-485 communication driver — frame parsing and transmission
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #include "main.h"
 
 volatile uint8_t rx_buffer[AIRMAC_SIZE+1] = {0}; 		// EnduroSat RS-485 incoming buffer
@@ -8,18 +17,18 @@ uint8_t instr_opcode[OPCODE_SIZE] = {0};				// Current instruction opcode
 volatile uint8_t rx_flag = 0;							// Flag for new incoming message
 volatile uint16_t rx_size = 0;							// size of incoming message	through RS-485
 
-volatile uint8_t uss_comm_reset = 0;					// LS-02 input reset
-
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart4;
 
 void Log(char *message)
 {
-	timestamp = HAL_GetTick();
-	total_seconds = timestamp / 1000;
-	seconds = total_seconds % 60;
-	minutes = (total_seconds % 3600) / 60;
-	hours = total_seconds / 3600;
+	char timestamp_string[15] = {0};
+
+	uint32_t timestamp = HAL_GetTick();
+	uint32_t total_seconds = timestamp / 1000;
+	uint32_t seconds = total_seconds % 60;
+	uint32_t minutes = (total_seconds % 3600) / 60;
+	uint32_t hours = total_seconds / 3600;
 	sprintf(timestamp_string, "[%05lu:%02lu:%02lu] ", hours, minutes, seconds);		// Generates timestamp string
 
 	HAL_UART_Transmit(&huart4, (uint8_t *) timestamp_string, 15, LOG_UART_TIMEOUT);
@@ -111,17 +120,17 @@ CMD_ReturnStatus LoadInstructionBuffer(void)
 void HandleIncomingCommand(app_state_t fallback_state)
 {
 	rx_flag = 0;
-	if (*rx_buffer == USS_ID && state != STATE_IGNORE){
+	if (*rx_buffer == USS_ID && board_status.state != STATE_IGNORE){
 	  if(delayed_flag == 1){ // USS was in STATE_DELAYED_PICTURE
 		  delayed_flag = 0;
 		  Log("Canceling scheduled photo...\r\n");
 	  }
 	  Log("Received valid USS request\r\n");
-	  cmd_ret = LoadInstructionBuffer();						// Loads the instruction buffer - 1B instruction + 5B opcode
-	  rx_flag = 0;												// Resets rx_flag for next command
-	  if(cmd_ret == CMD_OK) state = STATE_EXECUTE_COMMAND;		// If not ok, ignore and return to IDLE
+	  cmd_ret = LoadInstructionBuffer();									// Loads the instruction buffer - 1B instruction + 5B opcode
+	  rx_flag = 0;															// Resets rx_flag for next command
+	  if(cmd_ret == CMD_OK) board_status.state = STATE_EXECUTE_COMMAND;		// If not ok, ignore and return to IDLE
 	  else{
-		  state = STATE_TRANSMIT_RESPONSE;
+		  board_status.state = STATE_TRANSMIT_RESPONSE;
 	  }
 	}
 	else if (*rx_buffer == LS02_ID){
@@ -130,11 +139,11 @@ void HandleIncomingCommand(app_state_t fallback_state)
 	  if(delayed_flag == 1){ 				// USS was in STATE_DELAYED_PICTURE
 		  Log("Ignoring...\r\n");
 	  }
-	  state = fallback_state;
+	  board_status.state = fallback_state;
 	}
 	else {
 		Log("Unknown board ID, ignoring...\r\n");
-		state = STATE_IDLE;
+		board_status.state = STATE_IDLE;
 	}
 }
 

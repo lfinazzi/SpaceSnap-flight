@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : telemetry.c
+  * @brief          : Telemetry encoder — packs board state into RS-485 response frames
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #include "telemetry.h"
 #include "status.h"
 

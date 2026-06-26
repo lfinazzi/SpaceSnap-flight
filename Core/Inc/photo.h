@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : photo.h
+  * @brief          : Camera driver interface — capture API and configuration types
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #ifndef __PHOTO_H__
 #define __PHOTO_H__
 
@@ -18,6 +27,8 @@
 #define CAM_I2C_TIMEOUT			(100U)		  	// Timeout for I2C2
 #define DCMI_TIMEOUT 			(500U)			// Timeout for DCMI interface, expected transfer time is approx 20 ms
 
+/* DEFAULTS for black filtering and advanced photo settings */
+
 // These settings give ~18-19 counts for black pixels (lens cap on)
 // TODO TEST: These settings must be determined when testing under representative conditions
 #define BLACK_THRESHOLD_DEFAULT	(24U)			// Min. intensity to consider a pixel non-dark (out of 256), default value
@@ -25,6 +36,21 @@
 #define GAIN_DIGITAL_DEFAULT	(128U)			// Default sensor digital gain for advanced mode, 128 is unity
 #define EXPOSURE_COARSE_DEFAULT	(4U)			// Default sensor exposure for advanced mode, each count is PAL freq (@ 54 MHz) * 13.5 MHz / 54 MHz = 256.0 us (PAL)
 #define EXPOSURE_FINE_DEFAULT	(0U)			// Default sensor exposure for advanced mode, each count is 1 / 13.5 MHz = 0.074 us per clock (PAL or NTSC)
+
+/* DEFAULTS for delayed picture bursts */
+
+#define BURST_NUM_PHOTOS 		(4U)			// Fill 4 of 5 available buffers
+#define BURST_INTERVAL			(0U)			// Take pictures with no delay in between
+#define BURST_COMPRESSION		(1U)			// Perform compressions of all pictures taken
+#define BURST_COMPR_QUALITY		(1U)			// Worst quality to maximize memory
+
+typedef struct __attribute__((packed)){
+	uint16_t num_photos;						// number of photos to take after delay. Must be less than RAW_PHOTO_COUNT (5 in this case)
+	uint16_t time_between_photos;				// Time between photos taken in a burst
+	uint16_t perform_compressions;				// Perform compressions and save to FRAM after taking these pictures?
+	uint16_t compression_quality;				// Compression quality (1, 2, or 3)
+} delayed_params_t;
+
 
 typedef struct __attribute__((packed)){
 	uint16_t designator;			  			// global raw photo number taken

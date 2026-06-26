@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file           : command.c
+  * @brief          : Command dispatch table and execution handlers
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #include "command.h"
 #include "photo.h"
 #include "status.h"
@@ -13,7 +22,6 @@
 #include "stm32f2xx_hal.h"
 
 extern IWDG_HandleTypeDef hiwdg;
-extern cam_params_t cam_params;
 extern UART_HandleTypeDef huart4;
 
 // Command table — add new entries here, matching the extern declaration in command.h, for variable return size, change here!
@@ -35,6 +43,7 @@ const command_t command_table[] = {
 	{ "CMD_DumpAllSRAM",   		CMD_DUMP_SRAM_BIN_ID,         CMD_DumpAllSRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_DumpAllFRAM",   		CMD_DUMP_FRAM_BIN_ID,         CMD_DumpAllFRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_BackupFirmware",   	CMD_BACKUP_FIRMWARE_ID,       CMD_BackupFirmware,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},		// confirm needed
+	{ "CMD_ChangeBurstParams",  CMD_CHANGE_BURST_PARAMS_ID,   CMD_ChangeBurstParams,   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
     // ... add more here
 };
 
@@ -47,8 +56,7 @@ CMD_ReturnStatus cmd_ret;
 uint32_t picture_delay_start = 0;				// Moment the delayed photo instruction was executed
 uint8_t picture_delay_mins = 0;					// Amount of N-minute intervals to take a delayed photo
 uint8_t delayed_flag = 0;						// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
-
-uint8_t ignore_flag = 0;						// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
+uint8_t buffer_burst_start = 0;					// Buffer slot to save first photo of delayed burst captures
 
 extern fw_backup_info_t fw_backup_info;
 
@@ -159,11 +167,13 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 
 	if (buffer_number >= RAW_PHOTO_COUNT) {
 		Log("Invalid buffer number!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_BUFFER_INVALID;
 	}
 
 	if (black_fraction > 200) {
 		Log("Allowed values for black fraction are 0-200!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_PARAM_INVALID;
 	}
 
@@ -189,6 +199,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 			sprintf(log_buf, "Camera A init FAILED, ret=%d\r\n", ret);
 			Log(log_buf);
 			DeactivateCAMA();
+			CMD_PopulateEcho(opcode);
 			return CMD_CAM_BOOT_ERROR;
 		}
 		Log("Camera A init OK\r\n");
@@ -198,6 +209,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 			if (Photo_CaptureRawBlack(buffer_number, board_status.photos_taken, opcode, tries, black_fraction) != HAL_OK) {
 				Log("CAMA: photo capture FAILED\r\n");
 				DeactivateCAMA();
+				CMD_PopulateEcho(opcode);
 				return CMD_CAM_DCMI_ERROR;
 			}
 		}
@@ -206,6 +218,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 			if (Photo_CaptureRaw(buffer_number, board_status.photos_taken, opcode) != HAL_OK) {
 				Log("CAMA: photo capture FAILED\r\n");
 				DeactivateCAMA();
+				CMD_PopulateEcho(opcode);
 				return CMD_CAM_DCMI_ERROR;
 			}
 		}
@@ -231,6 +244,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 			sprintf(log_buf, "Camera B init FAILED, ret=%d\r\n", ret);
 			Log(log_buf);
 			DeactivateCAMB();
+			CMD_PopulateEcho(opcode);
 			return CMD_CAM_BOOT_ERROR;
 		}
 		Log("Camera B init OK\r\n");
@@ -240,6 +254,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 			if (Photo_CaptureRawBlack(buffer_number, board_status.photos_taken, opcode, tries, black_fraction) != HAL_OK) {
 				Log("CAMB: photo capture FAILED\r\n");
 				DeactivateCAMB();
+				CMD_PopulateEcho(opcode);
 				return CMD_CAM_DCMI_ERROR;
 			}
 		}
@@ -247,6 +262,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 			if (Photo_CaptureRaw(buffer_number, board_status.photos_taken, opcode) != HAL_OK) {
 				Log("CAMB: photo capture FAILED\r\n");
 				DeactivateCAMB();
+				CMD_PopulateEcho(opcode);
 				return CMD_CAM_DCMI_ERROR;
 			}
 		}
@@ -256,6 +272,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	}
 	else{
 		Log("Wrong camera number!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_CAM_BOOT_ERROR;
 	}
 
@@ -286,17 +303,19 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 
 /*
  * opcode[0:3] --> Same as CMD_TakePicture
- * opcode[4] --> picture delay (max delay = 255*MIN_INTERVAL mins. If MIN_INTERVAL = 5, max. delay is 21h
+ * opcode[4] --> first picture delay (max delay = 255*MIN_INTERVAL mins. If MIN_INTERVAL = 5, max. delay is 21h
  */
-CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode) {
-	picture_delay_mins = opcode[4]; 							// delay is Byte 5 of opcode
+CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode)
+{
+	picture_delay_mins = opcode[4]; 						// delay is Byte 5 of opcode
 	picture_delay_start = HAL_GetTick();
+	buffer_burst_start = (opcode[0] & 0xF0) >> 4;	    	// 1111_0000 mask, upper nibble
 
 	// write tx_buffer for USS return
 	tx_buffer[1] = COMMAND_SCHEDULED;
 
 	char log_buf[64];
-    sprintf(log_buf, "Scheduling delayed photo: %u x %umin intervals\r\n", picture_delay_mins, MIN_INTERVAL);
+    sprintf(log_buf, "Scheduling delayed photos after: %u x %umins\r\n", picture_delay_mins, MIN_INTERVAL);
     Log(log_buf);
 
 	CMD_PopulateEcho(opcode);
@@ -329,6 +348,7 @@ CMD_ReturnStatus CMD_DumpRaw(uint8_t *opcode)
 
 	if (slot >= RAW_PHOTO_COUNT) {
 		Log("Invalid buffer number!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_BUFFER_INVALID;
 	}
 
@@ -362,6 +382,7 @@ CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode)
 
 	if (!board_status.compression_buffer_occupied) {
 		Log("No compression in SRAM buffer!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_BUFFER_INVALID;
 	}
 
@@ -444,6 +465,7 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode)
 
 	if (buffer >= RAW_PHOTO_COUNT) {
 		Log("Invalid buffer number!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_BUFFER_INVALID;
 	}
 
@@ -451,6 +473,7 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode)
 	ret = CompressRawPhoto(buffer, quality);
 	if (ret == 0){		// Compression failed
 		Log("Compression error!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_COMPRESS_ERROR;
 	}
 
@@ -462,11 +485,13 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode)
 
 	if (board_status.compression_ptr_address + total_size > FIRMWARE_BACKUP_START) {		// Checks if FRAM will overflow allowed space (before FW backup start)
 		Log("FRAM full — cannot save compression.\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_FRAM_FULL;
 	}
 
 	if (board_status.compression_count >= MAX_COMPRESSED_PHOTOS) {
 		Log("Compression index full.\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_INDEX_FULL;
 	}
 
@@ -512,6 +537,7 @@ CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode)
 
 	if (memcmp(opcode, confirm_seq, OPCODE_SIZE) != 0) {
 		Log("FRAM erase confirmation mismatch -- aborting.\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_CONFIRM_FAILED;
 	}
 
@@ -650,6 +676,7 @@ CMD_ReturnStatus CMD_SendRawHeader(uint8_t *opcode)
 
 	if (slot >= RAW_PHOTO_COUNT) {
 		Log("Invalid buffer number!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_BUFFER_INVALID;
 	}
 
@@ -678,10 +705,12 @@ CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode)
 
 	if (index >= board_status.compression_count) {
 		Log("Invalid buffer number!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_BUFFER_INVALID;
 	}
 	if (!compression_table[index].valid) {
 		Log("Compression not valid!\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_BUFFER_INVALID;
 	}
 
@@ -725,6 +754,7 @@ CMD_ReturnStatus CMD_EraseCompressions(uint8_t *opcode)
 
 	if (memcmp(opcode, confirm_seq, OPCODE_SIZE) != 0) {
 		Log("FRAM erase confirmation mismatch -- aborting.\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_CONFIRM_FAILED;
 	}
 
@@ -790,6 +820,7 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 
 	if (memcmp(opcode, confirm_seq, OPCODE_SIZE) != 0) {
 		Log("Firmware backup confirmation mismatch -- aborting.\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_CONFIRM_FAILED;
 	}
 
@@ -806,6 +837,7 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 
 	if (app_size == 0 || app_size > FIRMWARE_IMAGE_SIZE) {
 		Log("Firmware backup aborted: app_size out of range for backup region.\r\n");
+		CMD_PopulateEcho(opcode);
 		return CMD_ERROR;
 	}
 
@@ -854,6 +886,7 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 	if (verify_crc != final_crc) {
 		sprintf(log_buf, "FRAM readback mismatch! wrote=0x%08lX read=0x%08lX\r\n", final_crc, verify_crc);
 		Log(log_buf);
+		CMD_PopulateEcho(opcode);
 		return CMD_ERROR;
 	}
 
@@ -861,6 +894,8 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 	 * from seeing a valid header pointing to a corrupt image. */
 	fw_backup_info.fw_backup_size  = app_size;
 	fw_backup_info.fw_backup_crc32 = final_crc;
+	fw_backup_info.fw_backup_version = ((uint32_t)VERSION_MAJOR << 16) | (uint32_t)VERSION_MINOR;
+
 	uint8_t *p = (uint8_t *)&fw_backup_info;
 	for (uint8_t i = 0; i < sizeof(fw_backup_info_t); i++) {
 		FRAM_WriteByte(FIRMWARE_BACKUP_START + i, p[i]);
@@ -872,3 +907,46 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 	CMD_PopulateEcho(opcode);
 	return CMD_OK;
 }
+
+/*
+ * opcode[0] --> 0x00 to reset defaults, 0x01 to modify burst params
+ * opcode[1] --> number of burst photos
+ * opcode[2] --> time in seconds between photos
+ * opcode[3] --> perform compressions?
+ * opcode[4] --> compression quality
+ */
+CMD_ReturnStatus CMD_ChangeBurstParams(uint8_t *opcode)
+{
+	uint8_t defaults     = opcode[0];
+	uint8_t num_photos   = opcode[1];
+	uint8_t time_delay   = opcode[2];
+	uint8_t comp_flag  	 = opcode[3];
+	uint8_t comp_quality = opcode[4];
+
+	// catches invalid parameter changes
+	if (num_photos > RAW_PHOTO_COUNT || comp_quality == 0 || comp_quality > 3) {
+		CMD_PopulateEcho(opcode);
+		return CMD_PARAM_INVALID;
+	}
+
+	if (defaults == 0) {	// reset defaults
+		board_status.delayed_params.num_photos = BURST_NUM_PHOTOS;
+		board_status.delayed_params.time_between_photos = BURST_INTERVAL;
+		board_status.delayed_params.perform_compressions = BURST_COMPRESSION;
+		board_status.delayed_params.compression_quality = BURST_COMPR_QUALITY;
+	}
+	else {
+		board_status.delayed_params.num_photos = num_photos;
+		board_status.delayed_params.time_between_photos = time_delay;
+		board_status.delayed_params.perform_compressions = comp_flag;
+		board_status.delayed_params.compression_quality = comp_quality;
+	}
+
+	CMD_PopulateEcho(opcode);
+	return CMD_OK;
+}
+
+
+
+
+

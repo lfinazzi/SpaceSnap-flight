@@ -2,16 +2,10 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body
+  * @brief          : Application entry point
+  * 				  USS Core initialization and main loop
   ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
   *
   ******************************************************************************
   */
@@ -59,8 +53,7 @@ UART_HandleTypeDef huart1;
 SRAM_HandleTypeDef hsram1;
 
 /* USER CODE BEGIN PV */
-HAL_StatusTypeDef ret;
-app_state_t state = STATE_IDLE;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -97,14 +90,11 @@ int main(void)
   /* Relocate vector table to application base — Already done in SystemInit(), but no harm to leave this here */
   SCB->VTOR = 0x08004000UL;
 
-  ret = HAL_OK;										// Saves return of HAL calls
-  state = 0;										// state = IDLE
   picture_delay_start = 0;							// Moment the delayed photo instruction was executed
   picture_delay_mins = 0;							// Amount of 5-minute intervals to take a delayed photo
   delayed_flag = 0;									// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
 
-  ignore_flag = 0;
-
+  uint8_t ignore_flag = 0;							// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
   uint32_t timeout_start = 0;
 
   /* USER CODE END 1 */
@@ -148,7 +138,7 @@ int main(void)
   LoadBoardStatusFRAM();
   board_status.uptime_total += board_status.uptime_session / 1000;						// Loads the previous uptime to the total_uptime variable
 
-  CheckResetCause();				// Checks last reset cause and loads it in board_status
+  CheckResetCause();	// Checks last reset cause and loads it in board_status
 
   // Clear volatile variables in memory (FRAM). These only make sense in current session
   ResetVolatileStatus();
@@ -169,7 +159,7 @@ int main(void)
   while (1)
   {
 	  HAL_IWDG_Refresh(&hiwdg); 													// Kick the IWDG once per loop
-	  switch (state) {
+	  switch (board_status.state) {
 		  case STATE_IDLE:
 			  if(rx_flag){
 				  HandleIncomingCommand(STATE_IGNORE);								// Waits for command reception and modifies state accordingly
@@ -179,7 +169,6 @@ int main(void)
 			  break;
 
 		  case STATE_IGNORE:		// TODO INTEGRATION: Test with LS02 hardware, select if we will use pulldowns or not for signaling GPIOs
-
 			  if(ignore_flag == 0)													// Only transmit buffer first time this is executed
 			  {
 				  Log("Waiting for reset\r\n");										// Return for DEB-UART for user to know IGNORE was reached
@@ -193,7 +182,7 @@ int main(void)
 				  Log("Leaving IGNORE mode.\r\n");
 				  Log("---------------------------------------------------\r\n");
 				  rx_flag = 0; 															// to avoid receiving something while blocked
-				  state = STATE_IDLE;
+				  board_status.state = STATE_IDLE;
 				  ignore_flag = 0;
 				  EnableListenRS485();
 			  }
@@ -203,13 +192,13 @@ int main(void)
 			  current_command_pointer = GetCommand(instr_number);					// Identifies command to execute
 			  cmd_ret = ExecuteCommand(current_command_pointer, instr_opcode);		// Executes command with opcode
 			  if (cmd_ret == CMD_SCHEDULED)
-				  state = STATE_DELAYED_PICTURE;
+				  board_status.state = STATE_DELAYED_PICTURE;
 			  else
-				  state = STATE_TRANSMIT_RESPONSE;
+				  board_status.state = STATE_TRANSMIT_RESPONSE;
 			  break;
 
 		  // **************************************************************************************************************************************************
-		  // Only the CMD_TakePictureDelayed() can make the program reach this state, TODO: Think of a way for this state to be recovered in case of unwanted power off
+		  // Only the CMD_TakePictureDelayed() can make the program reach this state
 		  case STATE_DELAYED_PICTURE:
 			  if(delayed_flag == 0)									// Only transmit buffer first time this is executed
 			  {
@@ -230,7 +219,7 @@ int main(void)
 				  ResetLS02();									// Re-activates LS-02 for next incoming instruction
 
 				  Log("Going IDLE...\r\n");
-				  state = STATE_IDLE;							// No point in transmitting response, as satellite will not be over GS
+				  board_status.state = STATE_IDLE;				// No point in transmitting response, as satellite will not be over GS
 				  delayed_flag = 0;
 			  }
 			  break;
@@ -241,11 +230,11 @@ int main(void)
 			  Log("---------------------------------------------------\r\n");
 			  TransmitBufferRS485();			// Transmits tx_buffer
 			  ResetLS02();						// Re-activates LS-02 for next incoming instruction
-			  state = STATE_IDLE;
+			  board_status.state = STATE_IDLE;
 			  break;
 
 		  default:
-			  state = STATE_IDLE;
+			  board_status.state = STATE_IDLE;
 			  break;
 	}
     /* USER CODE END WHILE */

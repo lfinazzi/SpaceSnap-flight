@@ -1,10 +1,20 @@
+/**
+  ******************************************************************************
+  * @file           : status.h
+  * @brief          : System status interface — board_status_t and shared state
+  ******************************************************************************
+  * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
+  *
+  ******************************************************************************
+  */
 #ifndef __STATUS_H__
 #define __STATUS_H__
 
 #include "command.h"
 #include "fram.h"
+#include "comms.h"
 
-#define MAX_COMPRESSED_PHOTOS           (40U)				// Maximum number of compressions possible
+#define MAX_COMPRESSED_PHOTOS           (100U)				// Maximum number of compressions possible
 
 #define RESET_CAUSE_UNKNOWN   			(0U)
 #define RESET_CAUSE_POR       			(1U)
@@ -14,10 +24,10 @@
 #define RESET_CAUSE_LOWPOWER       		(5U)
 
 
-
 typedef struct __attribute__((packed)) {
     uint32_t fw_backup_size;   		// Size in bytes of main application backup in FRAM
     uint32_t fw_backup_crc32;		// CRC32 of main application backup in FRAM
+    uint32_t fw_backup_version;		// Version of main application backup in FRAM
 } fw_backup_info_t;
 
 
@@ -85,23 +95,24 @@ typedef struct {
     // Photo taking params
     cam_params_t cam_params;						// Parameters that can be changed for photo capturing, all have default values, but can be changed
 
+    // Delayed photo params
+    delayed_params_t delayed_params;				// Parameters that can be changed for delayed photo burst capturing
+
+    // State tracking
+    app_state_t state;								// Tracks actual board state, system can recover in STATE_SCHEDULED in case of power off
+
 } board_status_t;
 
 typedef char board_status_t_size[	// Static assert to be sure to erase FRAM after changing board_status_t struct
-    (sizeof(board_status_t) == 84) ? 1 : -1
+    (sizeof(board_status_t) == 92) ? 1 : -1
 ];
 
 
-// Saves current board status
+// Board status
 extern board_status_t board_status;
-extern compression_index_entry_t compression_table[MAX_COMPRESSED_PHOTOS];		// Compression table
 
-extern uint32_t timestamp;				  // Variable to save timestamp (seconds) since power on
-extern uint32_t total_seconds;			  // Total seconds since power on
-extern char timestamp_string[15];		  // String to hold timestamp. Format: "[HH:MM:SS] "
-extern uint32_t hours;					  // Hours elapsed
-extern uint32_t minutes;				  // Minutes elapsed
-extern uint32_t seconds;				  // Seconds elapsed
+// Compression table
+extern compression_index_entry_t compression_table[MAX_COMPRESSED_PHOTOS];
 
 
 /********************************************************************************
