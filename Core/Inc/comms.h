@@ -56,13 +56,20 @@ typedef enum {
  *         to 5 digits to support long-duration mission uptime. Transmission
  *         is blocking with LOG_UART_TIMEOUT ms timeout per call.
  *         Uses strlen() to determine message length -- the input string must
- *         be null-terminated. Updates the global timestamp, total_seconds,
- *         hours, minutes, seconds, and timestamp_string variables as a side
- *         effect.
+ *         be null-terminated.
  *
  * @param  message Null-terminated string to transmit.
  ********************************************************************************/
 void Log(char *message);
+
+
+/********************************************************************************
+ * @brief  Prints SpaceSnap banner on boot.
+ *
+ *
+ * @note   Uses ascii characters for pretty banner.
+ ********************************************************************************/
+void PrintBanner(void);
 
 
 /********************************************************************************
@@ -146,10 +153,11 @@ CMD_ReturnStatus LoadInstructionBuffer(void);
  *         error. Any pending delayed photo (delayed_flag == 1) is cancelled
  *         (cleared) on a valid USS frame.
  *
- *         Frames not addressed to USS call DisableRS485() and transition to
- *         fallback_state. If a delayed photo was pending on a non-USS frame,
- *         it is logged but delayed_flag is NOT cleared -- the delayed photo
- *         remains scheduled.
+ *         Frames addressed to LS02_ID call DisableRS485() and transition to
+ *         fallback_state. Frames with any other unrecognized ID transition
+ *         directly to STATE_IDLE without calling DisableRS485(). If a delayed
+ *         photo was pending on an LS02 frame, it is logged but delayed_flag
+ *         is NOT cleared -- the delayed photo remains scheduled.
  *
  * @param  fallback_state State to enter when the received frame is not
  *                        addressed to USS (e.g. STATE_IDLE or

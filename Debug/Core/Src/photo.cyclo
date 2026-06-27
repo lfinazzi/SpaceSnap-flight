@@ -30,7 +30,7 @@
 ../Core/Src/photo.c:274:19:CAM_ReadReg	1
 ../Core/Src/photo.c:289:19:CAM_Init	8
 ../Core/Src/photo.c:654:19:CAM_InitAdvanced	8
-../Core/Src/photo.c:1053:19:Photo_CaptureRaw	8
-../Core/Src/photo.c:1149:9:CompressRawPhoto	3
-../Core/Src/photo.c:1217:10:count_black_pixels_uyvy	5
-../Core/Src/photo.c:1243:19:Photo_CaptureRawBlack	5
+../Core/Src/photo.c:1053:19:Photo_CaptureRaw	9
+../Core/Src/photo.c:1157:9:CompressRawPhoto	3
+../Core/Src/photo.c:1225:10:count_black_pixels_uyvy	5
+../Core/Src/photo.c:1251:19:Photo_CaptureRawBlack	5

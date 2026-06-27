@@ -31,6 +31,6 @@
 ../Core/Src/photo.c:289:19:CAM_Init	264	static
 ../Core/Src/photo.c:654:19:CAM_InitAdvanced	304	static
 ../Core/Src/photo.c:1053:19:Photo_CaptureRaw	112	static
-../Core/Src/photo.c:1149:9:CompressRawPhoto	120	static
-../Core/Src/photo.c:1217:10:count_black_pixels_uyvy	144	static
-../Core/Src/photo.c:1243:19:Photo_CaptureRawBlack	104	static
+../Core/Src/photo.c:1157:9:CompressRawPhoto	120	static
+../Core/Src/photo.c:1225:10:count_black_pixels_uyvy	144	static
+../Core/Src/photo.c:1251:19:Photo_CaptureRawBlack	104	static

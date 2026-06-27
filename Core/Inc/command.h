@@ -56,6 +56,7 @@ typedef enum {
 	CMD_SEND_COMP_HEADER_ID,	   // 0x3A
 	CMD_GET_STATUS_ID,             // 0x3B
 	CMD_CHANGE_BURST_PARAMS_ID,    // 0x3C
+	CMD_TAKE_PICTURE_BURST_ID,     // 0x3D
 
 	CMD_DUMP_RAW_ID        			= 0x11,
 	CMD_DUMP_COMPRESSED_ID 			= 0x12,
@@ -153,6 +154,15 @@ const command_t* GetCommand(uint8_t instruction_number);
 
 
 /********************************************************************************
+ * @brief  Delay helper function.
+ *
+ * @note   Kicks IWDG every 1000 ms to avoid reset. WARNING: This function is
+ * 		   blocking, so avoid using high values of seconds
+ *********************************************************************************/
+void delay_kick_wdg(uint16_t seconds);
+
+
+/********************************************************************************
  * @brief  Captures a single raw photo using the selected camera and stores it
  *         in the selected raw photo buffer.
  *
@@ -170,7 +180,8 @@ const command_t* GetCommand(uint8_t instruction_number);
  *
  * @param  opcode Pointer to a 5-byte opcode array:
  *                opcode[0] --> buffer number (4 MSb), CAM number (4 LSb)
- *                opcode[1] --> Use black filtering? 0 = no, 1 = yes
+ *                opcode[1] --> lower nibble: black filtering (0 = no, non-zero = yes)
+ *                              upper nibble: advanced mode (0 = basic AE, non-zero = manual exposure/gain)
  *                opcode[2] --> photo tries if black filtering enabled, otherwise unused
  *                opcode[3] --> black fraction for filtering if enabled, otherwise unused, Values possible are 0-200 (each is 0.5% of total pixels)
  *                opcode[4] --> unused for CMD_TakePicture
@@ -183,18 +194,60 @@ const command_t* GetCommand(uint8_t instruction_number);
  *         CMD_CAM_BOOT_ERROR if the selected camera fails to initialize, or if
  *         cam_number is invalid (not 0 or 1).
  *         CMD_CAM_DCMI_ERROR if Photo_CaptureRaw() fails.
- *         CMD_INVALID_PARAM if black fraction is higher than allowed value (200).
+ *         CMD_PARAM_INVALID if black fraction is higher than allowed value (200).
  ********************************************************************************/
 CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode);
+
+
+/********************************************************************************
+ * @brief  Captures many raw photos using the selected camera and stores it
+ *         in appropriate buffers
+ *
+ * @note   Activates and initializes the selected camera (A or B), captures many frames
+ * 		   via Photo_CaptureRaw(), then deactivates the camera.
+ *         Increments board_status.photos_taken and marks the corresponding
+ *         raw buffers occupied on success.
+ *
+ *         If filter_flag is set, the function should count black pixels in the
+ *         captured images and, if the count number exceeds black_fraction, retake the
+ *         photo, up to a maximum of "tries" attempts, before giving up.
+ *
+ * @note   Calls PopulateEcho() to write the instruction number and opcode
+ *         into tx_buffer for ground station acknowledgement.
+ *
+ * @note   This function gets some parameters from board_status.delayed_params,
+ *         which include: number of photos to take, time between them, if
+ *         photos should be compressed and stored in FRAM and the quality of
+ *         that compression.
+ *
+ * @param  opcode Pointer to a 5-byte opcode array:
+ *                opcode[0] --> buffer number (4 MSb), CAM number (4 LSb)
+ *                opcode[1] --> lower nibble: black filtering (0 = no, non-zero = yes)
+ *                              upper nibble: advanced mode (0 = basic AE, non-zero = manual exposure/gain)
+ *                opcode[2] --> photo tries if black filtering enabled, otherwise unused
+ *                opcode[3] --> black fraction for filtering if enabled, otherwise unused, Values possible are 0-200 (each is 0.5% of total pixels)
+ *                opcode[4] --> unused for CMD_TakePictureBurst
+ *
+ *
+ * @return CMD_OK on success.
+ *         CMD_BUFFER_INVALID if buffer_number is out of range.
+ *         CMD_CAM_BOOT_ERROR if the selected camera fails to initialize, or if
+ *         cam_number is invalid (not 0 or 1).
+ *         CMD_CAM_DCMI_ERROR if Photo_CaptureRaw() fails.
+ *         CMD_PARAM_INVALID if black fraction is higher than allowed value (200)
+ *         or buffers are not available to save board_status.delayed_params.num_photos
+ *         captures.
+ ********************************************************************************/
+CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode);
 
 
 /********************************************************************************
  * @brief  Schedules delayed photo captures after N x MIN_INTERVAL minutes.
  *
  * @note   Reads the delay count from opcode[4], records HAL_GetTick() as the
- *         start time, and writes COMMAND_SCHEDULED + the delay count into
- *         tx_buffer[1:2] for the OBC response. State machine transitions to
- *         STATE_DELAYED_PICTURE via the CMD_SCHEDULED return value.
+ *         start time, and writes COMMAND_SCHEDULED into tx_buffer[1] for the
+ *         OBC response. State machine transitions to STATE_DELAYED_PICTURE
+ *         via the CMD_SCHEDULED return value.
  *
  * @note   Calls PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
@@ -221,10 +274,10 @@ CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode);
  *
  * @note   Updates board_status.uptime_session from HAL_GetTick() before
  *         copying. A compile-time static assert verifies that
- *         sizeof(board_status_t) fits within tx_buffer (AIRMAC_SIZE - 2
- *         bytes available). Also calls LogBoardStatusFull() to print a full
- *         field-by-field breakdown of board_status over UART4 (debug) for
- *         human viewing.
+ *         sizeof(board_status_t) + sizeof(fw_backup_info_t) fits within
+ *         tx_buffer (AIRMAC_SIZE - DATA_HEADER_SIZE bytes available). Also
+ *         calls LogBoardStatusFull() to print a full field-by-field breakdown of 
+ *         board_status over UART4 (debug) for human viewing.
  *
  * @param  opcode Unused.
  *
@@ -302,7 +355,7 @@ CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode);
  * @note   Calls PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
- * @param  opcode opcode[0]: index of the parameter to change (0 = ae_rule_algo_val)
+ * @param  opcode opcode[0]: index of the parameter to change (0 = reset all to defaults)
  *                opcode[1]: value MSB
  *                opcode[2]: value LSB
  *
@@ -358,7 +411,7 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode);
  *                erase to proceed.
  *
  * @return CMD_OK on success.
- *         CMD_CONFIRMATION_FAILED if opcode does not match the required
+ *         CMD_CONFIRM_FAILED if opcode does not match the required
  *         confirmation sequence.
  ********************************************************************************/
 CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode);
@@ -497,10 +550,13 @@ CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode);
  * @brief  Erases all compressed photo data from FRAM and resets the
  *         compression table and related board_status fields.
  *
- * @note   Calls EraseCompressions(), which writes 0x00 to every byte from
- *         PHOTO_DATA_START to FIRMWARE_BACKUP_START via FRAM_WriteByte().
- *         This operation takes approximately 40 seconds. The IWDG is kicked
- *         on every byte write to prevent a watchdog reset during the erase.
+ * @note   Requires opcode to exactly match the confirmation sequence
+ *         BA BF 0A 0F 0A before proceeding, to reduce the risk of accidental
+ *         erasure from a corrupted/garbled command. Calls EraseCompressions(),
+ *         which writes 0x00 to every byte from PHOTO_DATA_START to
+ *         FIRMWARE_BACKUP_START via FRAM_WriteByte(). This operation takes
+ *         approximately 40 seconds. The IWDG is kicked on every byte write
+ *         to prevent a watchdog reset during the erase.
  *
  *         After the FRAM erase, resets the in-RAM compression_table[] to
  *         zero, resets board_status.compression_ptr_address to
@@ -510,9 +566,12 @@ CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode);
  *         Calls PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
- * @param  opcode Unused.
+ * @param  opcode Must exactly equal {0xBA, 0xBF, 0x0A, 0x0F, 0x0A} for the
+ *                erase to proceed.
  *
- * @return CMD_OK always.
+ * @return CMD_OK on success.
+ *         CMD_CONFIRM_FAILED if opcode does not match the required
+ *         confirmation sequence.
  ********************************************************************************/
 CMD_ReturnStatus CMD_EraseCompressions(uint8_t *opcode);
 
@@ -605,14 +664,14 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode);
  * @brief  Changes configurable burst parameters for taking many pictures
  * 		   with CMD_TakePictureDelayed().
  *
- * @param  opcode opcode[0]: 0x01 to reset defaults, 0x00 to modify burst params
+ * @param  opcode opcode[0]: 0x00 to reset defaults, non-zero to modify burst params
  *                opcode[1]: number of burst photos
  *                opcode[2]: time in seconds between photos
  *                opcode[3]: perform compressions?
  *                opcode[4]: compression quality
  *
  * @return CMD_OK if valid parameters.
- *         CMD_INVALID_PARAMS if invalid parameter is desired.
+ *         CMD_PARAM_INVALID if invalid parameter is desired.
  ********************************************************************************/
 CMD_ReturnStatus CMD_ChangeBurstParams(uint8_t *opcode);
 

@@ -29,3 +29,7 @@ void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
     dcmi_frame_ready = 1;
 }
 
+void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi)
+{
+    dcmi_error = 1;
+}

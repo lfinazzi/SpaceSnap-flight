@@ -40,7 +40,7 @@
 /* DEFAULTS for delayed picture bursts */
 
 #define BURST_NUM_PHOTOS 		(4U)			// Fill 4 of 5 available buffers
-#define BURST_INTERVAL			(0U)			// Take pictures with no delay in between
+#define BURST_INTERVAL			(10U)			// Take pictures with no delay in between (in seconds)
 #define BURST_COMPRESSION		(1U)			// Perform compressions of all pictures taken
 #define BURST_COMPR_QUALITY		(1U)			// Worst quality to maximize memory
 
@@ -198,8 +198,9 @@ void DeactivateCAMB(void);
  * @brief  Polls the Host Command Interface doorbell bit until the firmware
  *         completes processing the last issued command.
  *
- * @note   After issuing any HCI command via register 0x0040, the firmware
- *         sets bit 15 (doorbell) of the command register. This function
+ * @note   After issuing any HCI command via register 0x0040, the host sets
+ *         bit 15 (doorbell) of the command register. The sensor firmware
+ *         clears bit 15 when command processing is complete. This function
  *         polls until bit 15 clears, indicating command completion.
  *         The lower byte of the command register is logged for debugging
  *         but not checked for errors at this stage.
@@ -262,11 +263,10 @@ uint16_t CAM_GetState(uint8_t i2c_addr);
  * @brief  Writes a 16-bit value to a 16-bit addressed register on the
  *         ASX340AT image sensor over I2C.
  *
- * @note   Internal helper — not exposed in photo.h. All sensor register
- *         access within photo.c should go through this function.
- *         The ASX340AT register bus uses 16-bit addresses and 16-bit data.
- *         The value is transmitted big-endian (MSB first) as required by
- *         the sensor protocol. Uses hi2c2 with a 100ms timeout.
+ * @note   All sensor register access within photo.c should go through this
+ *         function. The ASX340AT register bus uses 16-bit addresses and
+ *         16-bit data. The value is transmitted big-endian (MSB first) as
+ *         required by the sensor protocol. Uses hi2c2 with a 100ms timeout.
  *         Do not call this function before ActivateCAMA() or ActivateCAMB()
  *         has returned, as the I2C level shifter will not be enabled.
  *
@@ -285,11 +285,10 @@ HAL_StatusTypeDef CAM_WriteReg(uint8_t i2c_addr, uint16_t reg, uint16_t val);
  * @brief  Reads a 16-bit value from a 16-bit addressed register on the
  *         ASX340AT image sensor over I2C.
  *
- * @note   Internal helper — not exposed in photo.h. All sensor register
- *         access within photo.c should go through this function.
- *         The ASX340AT register bus uses 16-bit addresses and 16-bit data.
- *         The response is read big-endian (MSB first) and reassembled into
- *         a uint16_t. Uses hi2c2 with CAM_I2C_TIMEOUT timeout.
+ * @note   All sensor register access within photo.c should go through this
+ *         function. The ASX340AT register bus uses 16-bit addresses and
+ *         16-bit data. The response is read big-endian (MSB first) and
+ *         reassembled into a uint16_t. Uses hi2c2 with CAM_I2C_TIMEOUT timeout.
  *         Do not call this function before ActivateCAMA() or ActivateCAMB()
  *         has returned, as the I2C level shifter will not be enabled.
  *
@@ -392,9 +391,7 @@ HAL_StatusTypeDef CAM_Init(uint8_t i2c_addr);
  *                            Max value = line_length_pck - 1 = 3455 clocks.
  *
  *         All gain and exposure values are read from board_status.cam_params,
- *         which is persisted in FRAM and updated via ground command. Default
- *         values on first boot: analog_gain = 32 (1x), digital_gain = 128
- *         (1x), coarse_exposure = 2 (512 µs), fine_exposure = 0.
+ *         which is persisted in FRAM and updated via ground command.
  *
  *         After Stage 3, performs a full register readback verification
  *         including all exposure and gain registers, and logs AWB runtime
@@ -526,9 +523,10 @@ uint32_t count_black_pixels_uyvy(volatile uint8_t *buffer, uint32_t  num_pixels,
  *                          first). Must be >= 1.
  * @param  black_fraction   Maximum tolerable fraction of black pixels allowed.
  *
- * @return HAL_OK      if a frame passed the black filter within `tries` attempts.
- *         HAL_ERROR   if Photo_CaptureRaw() returned HAL_ERROR on any attempt,
- *                     or if all `tries` frames were rejected as too black.
+ * @return HAL_OK      if a frame passed the black filter within `tries` attempts,
+ *                     or if all `tries` frames were rejected as too black
+ *                     (last captured frame remains in the slot buffer).
+ *         HAL_ERROR   if Photo_CaptureRaw() returned HAL_ERROR on any attempt.
  *         HAL_TIMEOUT if Photo_CaptureRaw() timed out on any attempt.
  ********************************************************************************/
 HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,

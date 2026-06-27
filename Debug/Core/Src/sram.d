@@ -35,9 +35,9 @@ Core/Src/sram.o: ../Core/Src/sram.c ../Core/Inc/sram.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim_ex.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h \
- ../Core/Inc/main.h ../Core/Inc/sram.h ../Core/Inc/fram.h \
- ../Core/Inc/status.h ../Core/Inc/comms.h ../Core/Inc/irq.h \
- ../Core/Inc/gpio.h ../Core/Inc/telemetry.h ../Core/Inc/status.h \
+ ../Core/Inc/status.h ../Core/Inc/fram.h ../Core/Inc/main.h \
+ ../Core/Inc/sram.h ../Core/Inc/comms.h ../Core/Inc/status.h \
+ ../Core/Inc/irq.h ../Core/Inc/gpio.h ../Core/Inc/telemetry.h \
  ../Core/Inc/comms.h
 ../Core/Inc/sram.h:
 ../Core/Inc/photo.h:
@@ -78,13 +78,13 @@ Core/Src/sram.o: ../Core/Src/sram.c ../Core/Inc/sram.h \
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim_ex.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h:
+../Core/Inc/status.h:
+../Core/Inc/fram.h:
 ../Core/Inc/main.h:
 ../Core/Inc/sram.h:
-../Core/Inc/fram.h:
-../Core/Inc/status.h:
 ../Core/Inc/comms.h:
+../Core/Inc/status.h:
 ../Core/Inc/irq.h:
 ../Core/Inc/gpio.h:
 ../Core/Inc/telemetry.h:
-../Core/Inc/status.h:
 ../Core/Inc/comms.h:

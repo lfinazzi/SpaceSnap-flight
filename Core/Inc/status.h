@@ -13,6 +13,7 @@
 #include "command.h"
 #include "fram.h"
 #include "comms.h"
+#include "main.h"
 
 #define MAX_COMPRESSED_PHOTOS           (100U)				// Maximum number of compressions possible
 
@@ -81,12 +82,8 @@ typedef struct {
     uint32_t fram_bytes_left;						// Bytes left to save compressions in FRAM
 
     // SRAM memory status - VOLATILE
-    uint8_t  raw_buffer_1_occupied;      			// is raw buffer 1 in use?
-    uint8_t  raw_buffer_2_occupied;      			// is raw buffer 2 in use?
-    uint8_t  raw_buffer_3_occupied;      			// is raw buffer 3 in use?
-    uint8_t  raw_buffer_4_occupied;     			// is raw buffer 4 in use?
-    uint8_t  raw_buffer_5_occupied;      			// is raw buffer 5 in use?
-    uint8_t  compression_buffer_occupied;      		// is compression buffer in use?
+    uint8_t raw_buffer_occupied[RAW_PHOTO_COUNT];  // is raw buffer with index i in use?
+    uint8_t compression_buffer_occupied;      		// is compression buffer in use?
 
     // ADC readings
     uint32_t  mcu_temp;								// MCU Temp reading of MCU with ADC

@@ -114,10 +114,12 @@ void SaveBoardStatusFRAM(void);
  * @brief  Loads board_status and compression_table from FRAM on bootup.
  *
  * @note   Calls TestFRAM() first. On success, reads sizeof(board_status_t)
- *         bytes from BOARD_STATUS_START into board_status, and
+ *         bytes from BOARD_STATUS_START into board_status,
  *         MAX_COMPRESSED_PHOTOS * sizeof(compression_index_entry_t) bytes
- *         from COMPRESSION_TABLE_START into compression_table, one byte at
- *         a time via FRAM_ReadByte(). Sets board_status.fram_ok accordingly.
+ *         from COMPRESSION_TABLE_START into compression_table (one byte at
+ *         a time via FRAM_ReadByte()), and fw_backup_size + fw_backup_crc32
+ *         from FIRMWARE_BACKUP_START into fw_backup_info via
+ *         ReadBufferFRAM(). Sets board_status.fram_ok accordingly.
  *
  *         On TestFRAM() failure, board_status is not loaded from FRAM but
  *         execution continues with the default zero-initialized state.
@@ -140,9 +142,12 @@ void LoadBoardStatusFRAM(void);
  *
  *         After erasing, zeroes board_status and compression_table in RAM
  *         via memset(), resets board_status.compression_ptr_address to
- *         PHOTO_DATA_START, and recalculates board_status.fram_bytes_left.
- *         Note: unlike EraseCompressions(), this also zeroes board_status
- *         itself, losing all persistent counters and state.
+ *         PHOTO_DATA_START, recalculates board_status.fram_bytes_left, then
+ *         re-initializes board_status.cam_params and
+ *         board_status.delayed_params to their compile-time default values
+ *         (*_DEFAULT macros). Note: unlike EraseCompressions(), this also
+ *         zeroes board_status itself, losing all persistent counters and
+ *         state.
  ********************************************************************************/
 void EraseFRAM(void);
 

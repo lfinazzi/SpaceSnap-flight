@@ -129,11 +129,7 @@ void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes)
 void ResetVolatileStatus(void)
 {
 	// All buffers unoccupied
-	board_status.raw_buffer_1_occupied = 0;
-	board_status.raw_buffer_2_occupied = 0;
-	board_status.raw_buffer_3_occupied = 0;
-	board_status.raw_buffer_4_occupied = 0;
-	board_status.raw_buffer_5_occupied = 0;
+	memset(board_status.raw_buffer_occupied, 0x00, RAW_PHOTO_COUNT);
 	board_status.compression_buffer_occupied = 0;
 
 	// reset uptime

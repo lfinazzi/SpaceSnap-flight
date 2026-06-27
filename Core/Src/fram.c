@@ -186,7 +186,7 @@ void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
     uint8_t cmd[4];
 
     if (fram_address + size > FIRMWARE_BACKUP_START) {		// Would overflow allowed region for compressed photo data
-        return;  // would wrap past 16Mb boundary
+        return;  // would overflow into firmware backup region
     }
 
     /* Write Enable Latch */
@@ -247,7 +247,7 @@ void SaveFRAM_Unlocked(uint8_t *buffer, uint32_t size, uint32_t fram_address)
     uint8_t cmd[4];
 
     if (fram_address + size > END_OF_FRAM) {		// Would overflow 2MB FRAM
-        return;  // would wrap past 16Mb boundary
+        return;  // would exceed 2MB FRAM capacity
     }
 
     /* Write Enable Latch */

@@ -11,7 +11,6 @@
 #define __SRAM_H__
 
 #include "photo.h"
-#include "main.h"
 #include "stm32f2xx_hal.h"
 
 #include <stdint.h>
@@ -41,8 +40,6 @@
 /* Direct access macro */
 #define COMPRESSED_BUFFER(n)  					((compressed_photo_t *)(COMPRESSED_BUFFER_BASE_ADDRESS + (n) * COMPRESSION_SIZE))
 #define COMPRESSED_BUFFER_1    					COMPRESSED_BUFFER(0)
-
-#define END_OF_BUFFERS							((COMPRESSED_BUFFER_BASE_ADDRESS) + (COMPRESSED_POOL_SIZE))
 
 /* End of SRAM */
 #define SRAM_END_ADDRESS                		(0x68400000U)

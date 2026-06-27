@@ -45,6 +45,36 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
  ********************************************************************************/
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi);
 
+
+/********************************************************************************
+ * @brief  HAL weak override — called on any DCMI capture error.
+ *
+ * @note   Overrides the HAL weak definition. Sets dcmi_error = 1 to signal
+ *         Photo_CaptureRaw() that a capture fault occurred before the frame
+ *         completed. The error source can be read from hdcmi->ErrorCode
+ *         after the callback returns; possible values are:
+ *           HAL_DCMI_ERROR_OVR     — FIFO overrun (data arrived faster than
+ *                                    DMA could drain it)
+ *           HAL_DCMI_ERROR_SYNC    — Embedded synchronisation mismatch
+ *                                    (unexpected SAV/EAV codes)
+ *           HAL_DCMI_ERROR_DMA     — DMA transfer fault
+ *           HAL_DCMI_ERROR_TIMEOUT — Capture timeout
+ *
+ *         Photo_CaptureRaw() polls dcmi_error in the same loop as
+ *         dcmi_frame_ready; a set dcmi_error causes the loop to exit
+ *         immediately rather than waiting for DCMI_TIMEOUT to expire.
+ *         This allows a meaningful distinction between a capture error
+ *         and a plain timeout.
+ *
+ *         Called from DCMI_IRQHandler via the HAL DCMI interrupt service
+ *         routine — do not call Log() or any other blocking function from
+ *         this context.
+ *
+ * @param  hdcmi  Pointer to the DCMI handle that detected the error.
+ ********************************************************************************/
+void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi);
+
+
 /* Flags set by DCMI callbacks, polled by Photo_CaptureRaw()          */
 extern volatile uint8_t dcmi_frame_ready;   // 1 = frame complete in SRAM
 extern volatile uint8_t dcmi_error;         // 1 = FIFO overrun or sync error

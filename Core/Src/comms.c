@@ -36,6 +36,37 @@ void Log(char *message)
 	return;
 }
 
+void PrintBanner(void)
+{
+    const char *banner =
+        "\r\n"
+		"	 .d8888b.                                     .d8888b.                              \r\n"
+		"	d88P  Y88b                                   d88P  Y88b                             \r\n"
+		"	Y88b.                                        Y88b.                                  \r\n"
+		"	 \"Y888b.   88888b.   8888b.   .d8888b .d88b.  \"Y888b.   88888b.   8888b.  88888b.   \r\n"
+		"		\"Y88b. 888 \"88b     \"88b d88P\"   d8P  Y8b    \"Y88b. 888 \"88b     \"88b 888 \"88b  \r\n"
+		"		  \"888 888  888 .d888888 888     88888888      \"888 888  888 .d888888 888  888  \r\n"
+		"	Y88b  d88P 888 d88P 888  888 Y88b.   Y8b.    Y88b  d88P 888  888 888  888 888 d88P  \r\n"
+		"	 \"Y8888P\"  88888P\"  \"Y888888  \"Y8888P \"Y8888  \"Y8888P\"  888  888 \"Y888888 88888P\"   \r\n"
+		"			   888                                                            888       \r\n"
+		"			   888                                                            888       \r\n"
+		"			   888                                                            888  	 	\r\n"
+		"																						\r\n"
+		"+-------------------------------------------------------------------------------------+\r\n"
+		"|                   			 Earth Observation Payload                  		   |\r\n"
+		"+-------------------------------------------------------------------------------------+\r\n"
+		"|  Platform  : STM32                                                                  |\r\n"
+		"|  Sensor    : ASX340AT | PAL 640x480 | YCbCr 4:2:2                       		       |\r\n"
+		"|  Codec     : TinyJPEG | Storage: SRAM + FRAM                                        |\r\n"
+		"|  Developer : Lucas Finazzi                                                          |\r\n"
+		"|                                                                                     |\r\n"
+		"+=====================================================================================+\r\n"
+		"\r\n"
+    ;
+
+    HAL_UART_Transmit(&huart4, (uint8_t *)banner, strlen(banner), HAL_MAX_DELAY);
+}
+
 void ClearTxBuffer(void)
 {
 	for(int i = 0; i < AIRMAC_SIZE; i++){
@@ -69,7 +100,7 @@ void TransmitBufferRS485(void)
 
 void ResetLS02(void)
 {
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);				// Sets LS-02 reset GPIO to low
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);				// Sets LS-02 reset GPIO high (active)
 	HAL_Delay(10);                                           		// Hold high for 10ms
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);    		// Pull low
 }

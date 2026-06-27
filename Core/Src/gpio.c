@@ -34,7 +34,7 @@ void GPIO_Init(void)
 	  // RESET_BAR, shared by two cameras!
 	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);		// only turn on after power rails have stabilized!
 
-	  // UP, LB low allows SRAM to operate in 16b mode
+	  // UB, LB low allows SRAM to operate in 16b mode
 
 	  // MEMO_UB, low on startup
 	  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_12, GPIO_PIN_RESET);

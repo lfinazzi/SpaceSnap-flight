@@ -91,7 +91,7 @@ int main(void)
   SCB->VTOR = 0x08004000UL;
 
   picture_delay_start = 0;							// Moment the delayed photo instruction was executed
-  picture_delay_mins = 0;							// Amount of 5-minute intervals to take a delayed photo
+  picture_delay_mins = 0;							// Amount of MIN_INTERVAL-minute intervals to take a delayed photo
   delayed_flag = 0;									// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
 
   uint8_t ignore_flag = 0;							// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
@@ -128,7 +128,9 @@ int main(void)
   MX_IWDG_Init();
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
-  Log("UNSAM SpaceSnap initializing...\r\n");
+
+  // TODO: Test new bootloader with added firmware version. Don't forget to erase FRAM!
+  PrintBanner();	// Prints boot SpaceSnap banner, TODO: See how it prints
   HAL_UARTEx_ReceiveToIdle_IT(&huart1, (uint8_t*) rx_buffer, AIRMAC_SIZE+1);		// Arms UART1 for IT reception
 
   // Wait for next inits
@@ -140,7 +142,7 @@ int main(void)
 
   CheckResetCause();	// Checks last reset cause and loads it in board_status
 
-  // Clear volatile variables in memory (FRAM). These only make sense in current session
+  // Clear volatile variables in RAM. These do not persist across resets
   ResetVolatileStatus();
 
   GPIO_Init();																		// GPIO default config on startup
@@ -198,7 +200,7 @@ int main(void)
 			  break;
 
 		  // **************************************************************************************************************************************************
-		  // Only the CMD_TakePictureDelayed() can make the program reach this state
+		  // Only the CMD_TakePictureDelayed() can make the program reach this state, TODO: Validate this new logic and test this
 		  case STATE_DELAYED_PICTURE:
 			  if(delayed_flag == 0)									// Only transmit buffer first time this is executed
 			  {
@@ -213,7 +215,7 @@ int main(void)
 
 			  else if (HAL_GetTick() - picture_delay_start >= (uint32_t)picture_delay_mins * MIN_INTERVAL * 60 * 1000)		// Has the delay passed?
 			  {
-				  current_command_pointer = GetCommand(CMD_TAKE_PICTURE_ID);				// CMD_TakePicture()
+				  current_command_pointer = GetCommand(CMD_TAKE_PICTURE_BURST_ID);			// CMD_TakePictureBurst()
 				  cmd_ret = ExecuteCommand(current_command_pointer, instr_opcode);			// Take a picture
 
 				  ResetLS02();									// Re-activates LS-02 for next incoming instruction
@@ -228,8 +230,7 @@ int main(void)
 		  case STATE_TRANSMIT_RESPONSE:
 			  Log("Transmitting buffer\r\n");
 			  Log("---------------------------------------------------\r\n");
-			  TransmitBufferRS485();			// Transmits tx_buffer
-			  ResetLS02();						// Re-activates LS-02 for next incoming instruction
+			  TransmitBufferRS485();			// Transmits tx_buffer and resets LS-02
 			  board_status.state = STATE_IDLE;
 			  break;
 

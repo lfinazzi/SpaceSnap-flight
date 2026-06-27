@@ -44,6 +44,7 @@ const command_t command_table[] = {
 	{ "CMD_DumpAllFRAM",   		CMD_DUMP_FRAM_BIN_ID,         CMD_DumpAllFRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
 	{ "CMD_BackupFirmware",   	CMD_BACKUP_FIRMWARE_ID,       CMD_BackupFirmware,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},		// confirm needed
 	{ "CMD_ChangeBurstParams",  CMD_CHANGE_BURST_PARAMS_ID,   CMD_ChangeBurstParams,   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+	{ "CMD_TakePictureBurst",   CMD_TAKE_PICTURE_BURST_ID,    CMD_TakePictureBurst,    HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
     // ... add more here
 };
 
@@ -56,7 +57,6 @@ CMD_ReturnStatus cmd_ret;
 uint32_t picture_delay_start = 0;				// Moment the delayed photo instruction was executed
 uint8_t picture_delay_mins = 0;					// Amount of N-minute intervals to take a delayed photo
 uint8_t delayed_flag = 0;						// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
-uint8_t buffer_burst_start = 0;					// Buffer slot to save first photo of delayed burst captures
 
 extern fw_backup_info_t fw_backup_info;
 
@@ -142,6 +142,14 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
     	memcpy(board_status.last_opcode, opcode, OPCODE_SIZE);		// Logs last command opcode
     }
     return st;
+}
+
+void delay_kick_wdg(uint16_t seconds)
+{
+    for (uint16_t i = 0; i < seconds; i++) {		// Avoid large values of seconds, as this is blocking
+        HAL_IWDG_Refresh(&hiwdg);
+        HAL_Delay(1000);
+    }
 }
 
 /*
@@ -277,25 +285,203 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	}
 
 
-	board_status.photos_taken++; 		// Increment the number of photos taken
+	board_status.photos_taken++; 							// Increment the number of photos taken
+	board_status.raw_buffer_occupied[buffer_number] = 1;	// Buffer is now occupied
 
-	switch(buffer_number){
-	case 0:
-		board_status.raw_buffer_1_occupied = 1;
-		break;
-	case 1:
-		board_status.raw_buffer_2_occupied = 1;
-		break;
-	case 2:
-		board_status.raw_buffer_3_occupied = 1;
-		break;
-	case 3:
-		board_status.raw_buffer_4_occupied = 1;
-		break;
-	case 4:
-		board_status.raw_buffer_5_occupied = 1;
-		break;
+	CMD_PopulateEcho(opcode);
+	return CMD_OK;
+}
+
+/*
+ * opcode[0] --> buffer number (4 MSb), CAM number (4 lsb)
+ * opcode[1] --> Use black filtering? 0 if no, 1 if yes
+ * opcode[2] --> photo tries if black filtering enabled. Otherwise unused
+ * opcode[3] --> black fraction for filtering if enabled. Otherwise unused: Values possible are 0-200 (each is 0.5% of total pixels)
+ * opcode[4] --> Unused for CMD_TakePictureBurst
+ *
+ */
+CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
+{
+	char log_buf[96];
+
+	uint8_t cam_number 		= opcode[0] & 0x0F;					// 0000_1111 mask,
+	uint8_t buffer_number 	= (opcode[0] & 0xF0) >> 4;	    	// 1111_0000 mask, upper nibble
+	uint8_t filter_flag 	= opcode[1] & 0x0F;					// 0000_1111 mask,
+	uint8_t advanced_flag 	= (opcode[1] & 0xF0) >> 4;			// 1111_0000 mask, upper nibble
+	uint8_t tries 		 	= opcode[2];
+	uint8_t black_fraction  = opcode[3];
+	// opcode 4 unused here
+
+	if (buffer_number + board_status.delayed_params.num_photos > RAW_PHOTO_COUNT) {		// Photos do not fit in available buffers
+		Log("Too many photos requested!\r\n");
+		CMD_PopulateEcho(opcode);
+		return CMD_PARAM_INVALID;
 	}
+
+	if (black_fraction > 200) {
+		Log("Allowed values for black fraction are 0-200!\r\n");
+		CMD_PopulateEcho(opcode);
+		return CMD_PARAM_INVALID;
+	}
+
+	// Opcode parameters
+	sprintf(log_buf, "Opcode params: cam=%d buf start=%d filter=%d tries=%d fraction=%d\r\n",
+		cam_number, buffer_number, filter_flag, tries, black_fraction);
+	Log(log_buf);
+
+	// Burst parameters
+	sprintf(log_buf, "Burst params: num_photos: %u time_between_photos [s]=%u comp?=%d quality=%u\r\n",
+			board_status.delayed_params.num_photos, board_status.delayed_params.time_between_photos,
+			board_status.delayed_params.perform_compressions,  board_status.delayed_params.compression_quality);
+	Log(log_buf);
+
+	HAL_StatusTypeDef ret;
+	if(cam_number == 0){
+		ActivateCAMA();
+
+		if (advanced_flag == 0)	{	// basic mode
+			Log("BASIC MODE SELECTED FOR CAM A\r\n");
+			ret = CAM_Init(CAM_I2C_ADDR_A);
+		}
+		else {	// advanced mode
+			Log("ADVANCED MODE SELECTED FOR CAM A\r\n");
+			ret = CAM_InitAdvanced(CAM_I2C_ADDR_A);
+		}
+
+		if(ret != HAL_OK)
+		{
+			sprintf(log_buf, "Camera A init FAILED, ret=%d\r\n", ret);
+			Log(log_buf);
+			DeactivateCAMA();
+			CMD_PopulateEcho(opcode);
+			return CMD_CAM_BOOT_ERROR;
+		}
+		Log("Camera A init OK\r\n");
+
+		if (filter_flag != 0){
+			Log("Black filtering activated\r\n");
+			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
+				ret = Photo_CaptureRawBlack(buffer_number+i, board_status.photos_taken, opcode, tries, black_fraction);
+				Log("Waiting...\r\n");
+				delay_kick_wdg(board_status.delayed_params.time_between_photos);
+
+				if(ret != HAL_OK){
+					Log("CAMA: photo capture FAILED\r\n");
+					DeactivateCAMA();
+					CMD_PopulateEcho(opcode);
+					return CMD_CAM_DCMI_ERROR;
+				}
+
+				board_status.photos_taken++; 											// Increment the number of photos taken
+				board_status.raw_buffer_occupied[buffer_number+i] = 1;					// Buffer is now occupied
+			}
+
+		}
+
+		else {	// no black filtering!
+			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
+				ret = Photo_CaptureRaw(buffer_number+i, board_status.photos_taken, opcode);
+				Log("Waiting...\r\n");
+				delay_kick_wdg(board_status.delayed_params.time_between_photos);
+
+				if(ret != HAL_OK){
+					Log("CAMA: photo capture FAILED\r\n");
+					DeactivateCAMA();
+					CMD_PopulateEcho(opcode);
+					return CMD_CAM_DCMI_ERROR;
+				}
+
+				board_status.photos_taken++; 											// Increment the number of photos taken
+				board_status.raw_buffer_occupied[buffer_number+i] = 1;					// Buffer is now occupied
+
+			}
+
+		}
+
+		HAL_Delay(10);
+		DeactivateCAMA();
+	}
+	else if(cam_number == 1){
+		ActivateCAMB();
+
+		if (advanced_flag == 0)	{	// basic mode
+			Log("BASIC MODE SELECTED FOR CAM B\r\n");
+			ret = CAM_Init(CAM_I2C_ADDR_B);
+		}
+		else {	// advanced mode
+			Log("ADVANCED MODE SELECTED FOR CAM B\r\n");
+			ret = CAM_InitAdvanced(CAM_I2C_ADDR_B);
+		}
+
+		if(ret != HAL_OK)
+		{
+			sprintf(log_buf, "Camera B init FAILED, ret=%d\r\n", ret);
+			Log(log_buf);
+			DeactivateCAMB();
+			CMD_PopulateEcho(opcode);
+			return CMD_CAM_BOOT_ERROR;
+		}
+		Log("Camera B init OK\r\n");
+
+		if (filter_flag != 0){
+			Log("Black filtering activated\r\n");
+			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
+				ret = Photo_CaptureRawBlack(buffer_number+i, board_status.photos_taken, opcode, tries, black_fraction);
+				Log("Waiting...\r\n");
+				delay_kick_wdg(board_status.delayed_params.time_between_photos);
+
+				if(ret != HAL_OK){
+					Log("CAMB: photo capture FAILED\r\n");
+					DeactivateCAMB();
+					CMD_PopulateEcho(opcode);
+					return CMD_CAM_DCMI_ERROR;
+				}
+
+				board_status.photos_taken++; 											// Increment the number of photos taken
+				board_status.raw_buffer_occupied[buffer_number+i] = 1;					// Buffer is now occupied
+			}
+
+		}
+
+		else {	// no black filtering!
+			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
+				ret = Photo_CaptureRaw(buffer_number+i, board_status.photos_taken, opcode);
+				Log("Waiting...\r\n");
+				delay_kick_wdg(board_status.delayed_params.time_between_photos);
+
+				if(ret != HAL_OK){
+					Log("CAMB: photo capture FAILED\r\n");
+					DeactivateCAMB();
+					CMD_PopulateEcho(opcode);
+					return CMD_CAM_DCMI_ERROR;
+				}
+
+				board_status.photos_taken++; 											// Increment the number of photos taken
+				board_status.raw_buffer_occupied[buffer_number+i] = 1;					// Buffer is now occupied
+
+			}
+
+		}
+
+		HAL_Delay(10);
+		DeactivateCAMB();
+	}
+	else{
+		Log("Wrong camera number!\r\n");
+		CMD_PopulateEcho(opcode);
+		return CMD_CAM_BOOT_ERROR;
+	}
+
+	// Does user want automatic compressions?
+	if (board_status.delayed_params.perform_compressions == 1) {
+		Log("Performing compressions!\r\n");
+		for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// compresses all photos
+			sprintf(log_buf, "Compression %u: \r\n", i);
+			Log(log_buf);
+			CompressRawPhoto(buffer_number+i, board_status.delayed_params.compression_quality);
+		}
+	}
+
 
 	CMD_PopulateEcho(opcode);
 	return CMD_OK;
@@ -309,7 +495,6 @@ CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode)
 {
 	picture_delay_mins = opcode[4]; 						// delay is Byte 5 of opcode
 	picture_delay_start = HAL_GetTick();
-	buffer_burst_start = (opcode[0] & 0xF0) >> 4;	    	// 1111_0000 mask, upper nibble
 
 	// write tx_buffer for USS return
 	tx_buffer[1] = COMMAND_SCHEDULED;

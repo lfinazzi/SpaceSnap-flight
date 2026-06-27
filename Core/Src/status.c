@@ -122,20 +122,10 @@ void LogBoardStatusFull(void)
 	Log(log_buf);
 
 	// SRAM buffer occupancy
-	sprintf(log_buf, "raw_buffer_1_occupied: %u\r\n", board_status.raw_buffer_1_occupied);
-	Log(log_buf);
-
-	sprintf(log_buf, "raw_buffer_2_occupied: %u\r\n", board_status.raw_buffer_2_occupied);
-	Log(log_buf);
-
-	sprintf(log_buf, "raw_buffer_3_occupied: %u\r\n", board_status.raw_buffer_3_occupied);
-	Log(log_buf);
-
-	sprintf(log_buf, "raw_buffer_4_occupied: %u\r\n", board_status.raw_buffer_4_occupied);
-	Log(log_buf);
-
-	sprintf(log_buf, "raw_buffer_5_occupied: %u\r\n", board_status.raw_buffer_5_occupied);
-	Log(log_buf);
+	for (uint8_t i = 0; i < RAW_PHOTO_COUNT; i++){
+		sprintf(log_buf, "raw_buffer_%u_occupied: %u\r\n", i+1, board_status.raw_buffer_occupied[i]);
+		Log(log_buf);
+	}
 
 	// ADC readings
 

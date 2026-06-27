@@ -22,12 +22,17 @@ Firmware for the **UNSAM SpaceSnap** imaging payload — a PC/104 form-factor bo
 
 - **Dual camera system** — Camera A (I2C 0xBA) and Camera B (I2C 0x90), each with independent 2.8 V power rail and 27 MHz external clock.
 - **DCMI capture** — DMA-driven parallel camera interface; single-shot snapshot mode.
+- **Auto-exposure mode** — Standard initialisation via `CAM_Init()`; the sensor's built-in AE/AWB algorithms control exposure and gain.
+- **Manual exposure/gain mode** — Advanced initialisation via `CAM_InitAdvanced()`; host sets analog gain, digital gain, coarse and fine exposure directly via ground command.
+- **Black-pixel filtering** — Captured frames are inspected for luma content; frames exceeding a configurable black-pixel fraction are discarded and retaken, up to a configurable retry limit.
 - **JPEG compression** — On-device compression using the TinyJPEG library at three selectable quality levels (1 = lowest, 3 = highest).
-- **Persistent telemetry** — Board status (boot count, uptime, reset causes, operation counters, ADC readings) stored in FRAM and survives power cycles.
-- **Delayed picture scheduling** — A photo can be scheduled to execute after N RS-485 polling intervals.
+- **Burst photography** — Configurable multi-shot bursts with inter-shot delay and optional automatic FRAM compression, triggered either immediately or after a scheduled delay.
+- **Persistent telemetry** — Board status (boot count, uptime, reset causes, operation counters, ADC readings, camera parameters) stored in FRAM and survives power cycles.
+- **Delayed picture scheduling** — A burst can be scheduled to execute after N × MIN_INTERVAL minutes, cancelled automatically on the next USS command.
 - **FRAM photo archive** — Up to 40 compressed images indexed in FRAM for later downlink.
-- **Chunked downlink** — Image data and headers streamed in 111-byte RS-485 chunks to the OBC.
-- **IWDG watchdog** — System health enforced by hardware watchdog.
+- **Chunked downlink** — Image data streamed in 117-byte RS-485 chunks to the OBC; headers fit in a single response frame.
+- **Firmware backup** — Application image streamed from internal flash to FRAM with CRC32 verification; bootloader can use this copy for recovery.
+- **IWDG watchdog** — System health enforced by hardware watchdog, refreshed throughout all long operations.
 
 ---
 
@@ -67,12 +72,14 @@ USS/
 ### Camera Interface
 Both cameras share a single DCMI bus and I2C bus (I2C2). Only one camera is powered at a time. Power sequencing:
 
-1. Assert 27 MHz EXTCLK output (TIM11 CH1 PWM).
-2. Enable 2.8 V camera rail (`IMG_ENA_A` / `IMG_ENA_B`).
-3. Enable I2C level shifter (`IMG_I2C_ENA`).
-4. Release camera reset (`CAM_RESET`).
-5. Wait 150 ms for sensor firmware boot.
-6. Configure sensor registers over I2C2 (resolution, frame rate, exposure).
+1. Enable level shifter supply rail (`IMG_ENA`, PA12).
+2. Start EXTCLK (27 MHz, TIM11 CH1 PWM) — must be running before sensor rails come up.
+3. Assert `RESET_BAR` LOW (PC0, shared between both cameras).
+4. Enable 2.8 V camera rail (`IMG_ENA_A` / `IMG_ENA_B`). Wait 10 ms for rail stabilisation.
+5. Enable I2C level shifter (`IMG_I2C_ENA`, PA11).
+6. Release `RESET_BAR` HIGH, starting sensor boot sequence and internal 1.8 V regulator.
+7. Wait 150 ms for sensor firmware to complete Host Config Mode boot.
+8. Configure sensor via `CAM_Init()` (auto AE/AWB) or `CAM_InitAdvanced()` (manual exposure/gain).
 
 ### Memory Layout
 
@@ -126,37 +133,48 @@ Captures a single raw YCbCr frame and stores it in the selected SRAM buffer.
 | Byte | Field | Values |
 |------|-------|--------|
 | `opcode[0]` | `[7:4]` destination buffer · `[3:0]` camera select | Buffer: 0–4 · Camera: 0 = CAM A, 1 = CAM B |
-| `opcode[1]` | Black-filter enable | 0 = disabled, 1 = enabled |
+| `opcode[1]` | `[7:4]` advanced mode · `[3:0]` black-filter enable | Advanced: 0 = basic/AE, non-zero = manual exposure/gain · Filter: 0 = disabled, non-zero = enabled |
 | `opcode[2]` | Retry count (filter enabled only) | Number of retakes before giving up |
-| `opcode[3]` | Black-pixel threshold (filter enabled only) | Pixel count limit |
+| `opcode[3]` | Black-pixel fraction limit (filter enabled only) | 0–200 (each unit = 0.5 % of total pixels) |
 | `opcode[4]` | — | Unused |
 
-> Example — CAM B into buffer 0: `01 00 00 00 00`
+> Example — CAM B into buffer 0, no filter, basic AE: `01 00 00 00 00`
 
 ---
 
 #### `0x34` — `CMD_TakePictureDelayed`
-Schedules a photo to execute after N × MIN_INTERVAL minutes. Returns `CMD_SCHEDULED` immediately and transitions the state machine to `STATE_DELAYED_PICTURE`.
+Schedules a burst of photos to execute after N × MIN_INTERVAL minutes. Returns `CMD_SCHEDULED` immediately and transitions to `STATE_DELAYED_PICTURE`. Burst settings (number of photos, inter-shot delay, compression) are taken from `board_status.delayed_params` (set via `CMD_ChangeBurstParams`). Any subsequent command addressed to USS cancels the scheduled burst.
 
 | Byte | Field | Values |
 |------|-------|--------|
 | `opcode[0]` | `[7:4]` buffer · `[3:0]` camera | Same encoding as `CMD_TakePicture` |
-| `opcode[1]` | Black-filter enable | Same as `CMD_TakePicture` |
+| `opcode[1]` | `[7:4]` advanced mode · `[3:0]` black-filter enable | Same encoding as `CMD_TakePicture` |
 | `opcode[2]` | Retry count | Same as `CMD_TakePicture` |
-| `opcode[3]` | Black-pixel threshold | Same as `CMD_TakePicture` |
+| `opcode[3]` | Black-pixel fraction limit | Same as `CMD_TakePicture` |
 | `opcode[4]` | Delay in intervals (N) | 1–255 · max = 255 × MIN_INTERVAL min |
 
 ---
 
-#### `0x35` — `CMD_ChangeCamParams` *(untested)*
-Updates a configurable camera register shared by both cameras.
+#### `0x35` — `CMD_ChangeCamParams`
+Updates a configurable camera parameter shared by both cameras and persisted in FRAM. Takes effect on the next camera initialisation.
 
 | Byte | Field | Values |
 |------|-------|--------|
-| `opcode[0]` | Parameter index | 0 = `ae_rule_algo_val` (only index implemented) |
+| `opcode[0]` | Parameter index | See table below |
 | `opcode[1]` | New value MSB | — |
 | `opcode[2]` | New value LSB | — |
 | `opcode[3:4]` | — | Unused |
+
+**Parameter index table:**
+
+| Index | Parameter | Notes |
+|-------|-----------|-------|
+| 0 | Reset all to defaults | Ignores `opcode[1:2]` |
+| 1 | `black_threshold` | Luma threshold for black-pixel filter (0–255) |
+| 2 | `sensor_analog_gain` | Analog gain for advanced mode (unity = 32) |
+| 3 | `sensor_digital_gain` | Digital gain for advanced mode (unity = 128) |
+| 4 | `sensor_coarse_exposure` | Coarse integration time in line periods |
+| 5 | `sensor_fine_exposure` | Fine integration time in pixel clocks |
 
 ---
 
@@ -212,7 +230,33 @@ Returns the fixed-size metadata header of a FRAM-stored compressed image (index,
 ---
 
 #### `0x3B` — `CMD_GetStatus`
-Serialises `board_status_t` into the response frame and prints a full human-readable field breakdown over UART4. No opcode.
+Serialises `board_status_t` and `fw_backup_info_t` into the response frame and prints a full human-readable field breakdown over UART4. No opcode.
+
+---
+
+#### `0x3C` — `CMD_ChangeBurstParams`
+Updates the burst photography parameters stored in `board_status.delayed_params` and persisted in FRAM. These settings are used by both `CMD_TakePictureDelayed` and `CMD_TakePictureBurst`.
+
+| Byte | Field | Values |
+|------|-------|--------|
+| `opcode[0]` | Mode | 0x00 = reset all to defaults · non-zero = apply `opcode[1:4]` |
+| `opcode[1]` | Number of photos | 1 to RAW_PHOTO_COUNT (5) |
+| `opcode[2]` | Time between photos (seconds) | 0–255 |
+| `opcode[3]` | Compress and save to FRAM? | 0 = no · non-zero = yes |
+| `opcode[4]` | Compression quality | 1 = lowest · 2 = medium · 3 = highest |
+
+---
+
+#### `0x3D` — `CMD_TakePictureBurst`
+Captures multiple raw frames immediately using the settings in `board_status.delayed_params` (number of photos, inter-shot delay, optional compression).
+
+| Byte | Field | Values |
+|------|-------|--------|
+| `opcode[0]` | `[7:4]` starting buffer · `[3:0]` camera select | Buffer: 0–4 · Camera: 0 = CAM A, 1 = CAM B |
+| `opcode[1]` | `[7:4]` advanced mode · `[3:0]` black-filter enable | Same encoding as `CMD_TakePicture` |
+| `opcode[2]` | Retry count (filter enabled only) | Number of retakes before giving up |
+| `opcode[3]` | Black-pixel fraction limit (filter enabled only) | 0–200 (each unit = 0.5 % of total pixels) |
+| `opcode[4]` | — | Unused |
 
 ---
 
@@ -242,7 +286,7 @@ Streams the entire FRAM address space as raw binary over UART4 (256-byte burst S
 ### Danger Zone
 
 #### `0x88` — `CMD_EraseFRAM`
-Erases the full 2 MB FRAM byte-by-byte (~40 s, IWDG refreshed throughout). **Requires an exact 5-byte confirmation opcode** to prevent accidental erasure.
+Erases the full FRAM writable region byte-by-byte (~40 s, IWDG refreshed throughout). Resets all `board_status` fields and reinitialises `cam_params` and `delayed_params` to defaults. Does not touch the firmware backup region. **Requires an exact 5-byte confirmation opcode** to prevent accidental erasure.
 
 | Byte | Required value |
 |------|---------------|
@@ -252,7 +296,7 @@ Erases the full 2 MB FRAM byte-by-byte (~40 s, IWDG refreshed throughout). **Req
 | `opcode[3]` | `0x0F` |
 | `opcode[4]` | `0x0A` |
 
-Returns `CMD_CONFIRM_FAILED` if the opcode does not exactly match `0A 0F 0A 0F 0A`.
+Returns `CMD_CONFIRM_FAILED` if the opcode does not exactly match.
 
 ---
 
@@ -262,7 +306,32 @@ Persists `board_status` to FRAM, transmits a success response to the OBC, then t
 ---
 
 #### `0x90` — `CMD_EraseCompressions`
-Erases only the FRAM photo data region (`PHOTO_DATA_START` → `FIRMWARE_BACKUP_START`, ~40 s) and resets the in-RAM compression table and all related `board_status` fields. No opcode.
+Erases only the FRAM photo data region (`PHOTO_DATA_START` → `FIRMWARE_BACKUP_START`, ~40 s, IWDG refreshed throughout) and resets the in-RAM compression table and all related `board_status` fields. **Requires an exact 5-byte confirmation opcode** to prevent accidental erasure.
+
+| Byte | Required value |
+|------|---------------|
+| `opcode[0]` | `0xBA` |
+| `opcode[1]` | `0xBF` |
+| `opcode[2]` | `0x0A` |
+| `opcode[3]` | `0x0F` |
+| `opcode[4]` | `0x0A` |
+
+Returns `CMD_CONFIRM_FAILED` if the opcode does not exactly match.
+
+---
+
+#### `0x91` — `CMD_BackupFirmware`
+Streams the application image from internal flash to the FRAM backup region in 256-byte chunks, computing a running CRC32 (zlib-compatible, poly `0xEDB88320`). On completion, writes `fw_backup_size`, `fw_backup_crc32`, and `fw_backup_version` to the FRAM backup header. Then reads the image back from FRAM and recomputes the CRC32 to confirm the write. IWDG is refreshed between chunks in both passes. **Requires an exact 5-byte confirmation opcode.**
+
+| Byte | Required value |
+|------|---------------|
+| `opcode[0]` | `0xB4` |
+| `opcode[1]` | `0xC4` |
+| `opcode[2]` | `0xB4` |
+| `opcode[3]` | `0xC4` |
+| `opcode[4]` | `0xB4` |
+
+Returns `CMD_CONFIRM_FAILED` if opcode does not match. Returns `CMD_ERROR` if the application image size is out of range or the readback CRC does not match.
 
 ---
 
@@ -283,7 +352,8 @@ Erases only the FRAM photo data region (`PHOTO_DATA_START` → `FIRMWARE_BACKUP_
 | 81 | `COMMAND_FRAM_FULL` | Insufficient FRAM space for new compression |
 | 82 | `COMMAND_BUFFER_INVALID` | Buffer index out of range or entry not valid |
 | 83 | `COMMAND_INDEX_FULL` | Compression index table full (40-entry max) |
-| 84 | `COMMAND_CONFIRM_FAILED_ID` | Confirmation opcode mismatch (danger zone) |
+| 84 | `COMMAND_CONFIRM_FAILED` | Confirmation opcode mismatch (danger zone) |
+| 85 | `COMMAND_PARAM_INVALID` | Invalid value for a command parameter |
 
 ---
 
@@ -295,9 +365,13 @@ The `board_status_t` struct is persisted in FRAM and updated after every signifi
 - **Reset counters:** IWDG, low-power, software, POR, pin reset, unknown.
 - **Memory flags:** FRAM and SRAM initialisation health.
 - **Last command:** instruction ID, status code, opcode bytes.
-- **Operation counters:** photos taken, compressions performed, images rejected.
+- **Operation counters:** photos taken, compressions performed, images rejected by black filter.
 - **ADC readings:** MCU internal temperature, VREFINT (supply voltage reference).
 - **FRAM archive state:** write pointer, compressed image count, bytes remaining.
+- **Camera parameters (`cam_params`):** black threshold, analog gain, digital gain, coarse and fine exposure. Persisted so manual settings survive reboots.
+- **Burst parameters (`delayed_params`):** number of photos, inter-shot interval, compression flag, compression quality.
+
+The `fw_backup_info_t` struct (also transmitted with `CMD_GetStatus`) tracks the firmware image stored in the FRAM backup region: `fw_backup_size`, `fw_backup_crc32`, and `fw_backup_version`.
 
 ---
 
@@ -312,9 +386,7 @@ The `USS.ioc` file can be opened in **STM32CubeMX** to regenerate HAL drivers or
 
 ---
 
-## Known Limitations / Pending Work
+## Pending Work
 
-- **Black pixel filtering** — Infrastructure (counters, opcode fields) is in place but the detection algorithm is not yet implemented.
-- **Camera parameter tuning** — `CMD_ChangeCamParams` only writes the AE algorithm register; other AE/AWB stages are commented out and marked untested.
-- **USS reset GPIO** — `PollUSSReset()` cannot read PA8 as HIGH; pending hardware investigation.
-- **Firmware backup CRC** — Field reserved in `board_status_t`; CRC algorithm and linker support not yet implemented.
+- **Periodic memory scrubbing** — Would be useful as a task performed in STATE_IDLE when the board has no task.
+- **Check integrity of board_status on load** — Sanity check on some fields to check integrity before loading this struct.

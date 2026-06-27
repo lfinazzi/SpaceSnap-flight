@@ -1061,10 +1061,10 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
 
     /* Fill header */
     buf->designator    = designator;
-    uint32_t uptime = (board_status.uptime_session & 0xFFFF0000) | (board_status.uptime_session & 0x0000FFFF);
-    uptime /= 1000; 	// Pass to seconds (rounded)
-    buf->timestamp_MSB = (uint16_t)(board_status.uptime_total >> 16) + (uint16_t)(uptime >> 16);
-    buf->timestamp_LSB = (uint16_t)(board_status.uptime_total & 0xFFFF) + (uint16_t)(uptime & 0xFFFF);
+    uint32_t uptime = board_status.uptime_session  /= 1000; 	// Pass to seconds (rounded)
+    uint32_t timestamp = board_status.uptime_total + uptime;
+    buf->timestamp_MSB = (uint16_t)(timestamp >> 16);
+    buf->timestamp_LSB = (uint16_t)(timestamp & 0xFFFF);
 
     // Saved in uint16_t for memory alignment. Some bytes wasted, but negligible
     for (int i = 0; i < OPCODE_SIZE; i++) {
@@ -1096,6 +1096,7 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
                                                 (uint32_t)&buf->data[0],
                                                 H * L / 2);
 
+
     if (ret != HAL_OK) {
         Log("DCMI: start failed\r\n");
         return HAL_ERROR;
@@ -1123,6 +1124,13 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
             HAL_DCMI_Stop(&hdcmi);
             return HAL_TIMEOUT;
         }
+    }
+
+    // DCMI error
+    if (dcmi_error) {
+        Log("DCMI: capture error\r\n");
+        HAL_DCMI_Stop(&hdcmi);
+        return HAL_ERROR;
     }
 
     if(dcmi_frame_ready)
@@ -1287,11 +1295,11 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
         board_status.images_rejected_black++;
 
         if (attempt == tries) {
-            Log("All attempts rejected, giving up\r\n");
-            return HAL_ERROR;
+            Log("All attempts rejected, giving up\r\n");		// Even though no photo was good enough, the last one remains saved in SRAM buffer
+            return HAL_OK;
         }
         Log("---------------------------------------------------\r\n");
     }
 
-    return HAL_ERROR;  // unreachable, satisfies compiler
+    return HAL_OK;  // unreachable, satisfies compiler
 }
