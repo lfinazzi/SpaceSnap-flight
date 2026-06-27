@@ -75,9 +75,4 @@ void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi);
 void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi);
 
 
-/* Flags set by DCMI callbacks, polled by Photo_CaptureRaw()          */
-extern volatile uint8_t dcmi_frame_ready;   // 1 = frame complete in SRAM
-extern volatile uint8_t dcmi_error;         // 1 = FIFO overrun or sync error
-
-
 #endif

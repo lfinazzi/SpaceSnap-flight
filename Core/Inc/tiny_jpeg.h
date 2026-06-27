@@ -41,9 +41,7 @@ extern "C" {
 #define TJE_HEADER_GUARD
 
 #include <stdint.h>
-#include "photo.h"
-
-extern IWDG_HandleTypeDef hiwdg;
+#include "main.h"
 
 // tje_encode_to_memory
 //

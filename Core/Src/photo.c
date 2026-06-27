@@ -14,11 +14,6 @@
 #define TJE_IMPLEMENTATION
 #include <tiny_jpeg.h>
 
-extern I2C_HandleTypeDef hi2c2;
-extern TIM_HandleTypeDef htim11;
-extern DCMI_HandleTypeDef hdcmi;
-extern IWDG_HandleTypeDef hiwdg;
-
 volatile uint8_t dcmi_frame_ready 	= 0;   // set by callback, cleared by main
 volatile uint8_t dcmi_error       	= 0;   // set on DCMI error
 

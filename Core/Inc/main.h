@@ -130,6 +130,18 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN Private defines */
 
+extern ADC_HandleTypeDef hadc1;
+extern IWDG_HandleTypeDef hiwdg;
+extern UART_HandleTypeDef huart4;
+extern UART_HandleTypeDef huart1;
+extern I2C_HandleTypeDef hi2c2;
+extern TIM_HandleTypeDef htim11;
+extern DCMI_HandleTypeDef hdcmi;
+extern SPI_HandleTypeDef hspi2;
+
+extern uint32_t _app_flash_start;
+extern uint32_t _app_flash_end;
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

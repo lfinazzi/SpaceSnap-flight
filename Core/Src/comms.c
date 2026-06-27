@@ -17,9 +17,6 @@ uint8_t instr_opcode[OPCODE_SIZE] = {0};				// Current instruction opcode
 volatile uint8_t rx_flag = 0;							// Flag for new incoming message
 volatile uint16_t rx_size = 0;							// size of incoming message	through RS-485
 
-extern UART_HandleTypeDef huart1;
-extern UART_HandleTypeDef huart4;
-
 void Log(char *message)
 {
 	char timestamp_string[15] = {0};
@@ -152,8 +149,8 @@ void HandleIncomingCommand(app_state_t fallback_state)
 {
 	rx_flag = 0;
 	if (*rx_buffer == USS_ID && board_status.state != STATE_IGNORE){
-	  if(delayed_flag == 1){ // USS was in STATE_DELAYED_PICTURE
-		  delayed_flag = 0;
+	  if(board_status.delayed_flag == 1){ // USS was in STATE_DELAYED_PICTURE
+		  board_status.delayed_flag = 0;
 		  Log("Canceling scheduled photo...\r\n");
 	  }
 	  Log("Received valid USS request\r\n");
@@ -167,7 +164,7 @@ void HandleIncomingCommand(app_state_t fallback_state)
 	else if (*rx_buffer == LS02_ID){
 	  Log("Received LS-02 command\r\n");
 	  DisableRS485();
-	  if(delayed_flag == 1){ 				// USS was in STATE_DELAYED_PICTURE
+	  if(board_status.delayed_flag == 1){ 				// USS was in STATE_DELAYED_PICTURE
 		  Log("Ignoring...\r\n");
 	  }
 	  board_status.state = fallback_state;

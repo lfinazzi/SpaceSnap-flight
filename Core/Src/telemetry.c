@@ -7,11 +7,7 @@
   *
   ******************************************************************************
   */
-#include "telemetry.h"
-#include "status.h"
-
-extern board_status_t board_status;
-extern ADC_HandleTypeDef hadc1;
+#include "main.h"
 
 
 void CheckResetCause(void)

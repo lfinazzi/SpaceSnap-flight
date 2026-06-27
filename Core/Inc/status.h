@@ -95,13 +95,17 @@ typedef struct {
     // Delayed photo params
     delayed_params_t delayed_params;				// Parameters that can be changed for delayed photo burst capturing
 
+    uint32_t delayed_start;							// Board timestamp when delayed request started (seconds)
+    uint8_t delayed_intervals;						// Minutes after start to execute photo capture (mins)
+    uint8_t delayed_flag;							// Indicates if instruction was not requested in this boot session
+
     // State tracking
     app_state_t state;								// Tracks actual board state, system can recover in STATE_SCHEDULED in case of power off
 
 } board_status_t;
 
 typedef char board_status_t_size[	// Static assert to be sure to erase FRAM after changing board_status_t struct
-    (sizeof(board_status_t) == 92) ? 1 : -1
+    (sizeof(board_status_t) == 100) ? 1 : -1
 ];
 
 
@@ -110,6 +114,9 @@ extern board_status_t board_status;
 
 // Compression table
 extern compression_index_entry_t compression_table[MAX_COMPRESSED_PHOTOS];
+
+// Fw backup info
+extern fw_backup_info_t fw_backup_info;
 
 
 /********************************************************************************

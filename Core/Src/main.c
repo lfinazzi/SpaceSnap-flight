@@ -90,10 +90,6 @@ int main(void)
   /* Relocate vector table to application base — Already done in SystemInit(), but no harm to leave this here */
   SCB->VTOR = 0x08004000UL;
 
-  picture_delay_start = 0;							// Moment the delayed photo instruction was executed
-  picture_delay_mins = 0;							// Amount of MIN_INTERVAL-minute intervals to take a delayed photo
-  delayed_flag = 0;									// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
-
   uint8_t ignore_flag = 0;							// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
   uint32_t timeout_start = 0;
 
@@ -202,10 +198,15 @@ int main(void)
 		  // **************************************************************************************************************************************************
 		  // Only the CMD_TakePictureDelayed() can make the program reach this state, TODO: Validate this new logic and test this
 		  case STATE_DELAYED_PICTURE:
-			  if(delayed_flag == 0)									// Only transmit buffer first time this is executed
+
+			  // Time elapsed recovers even in the case of power off. All time waited upto power off is conserved
+		      uint32_t current_ts_sec = board_status.uptime_total + board_status.uptime_session / 1000;
+			  uint32_t delayed_sec = (uint32_t)board_status.delayed_intervals * MIN_INTERVAL * 60;
+
+			  if(board_status.delayed_flag == 0)					// Only transmit buffer if instruction requested this boot session
 			  {
 				  TransmitBufferRS485();							// Return for OBC, indicating command scheduled if everything ok
-				  delayed_flag = 1;
+				  board_status.delayed_flag = 1;
 			  }
 
 			  if (rx_flag) {										// Board is catching any incoming messages to cancel the delayed picture command
@@ -213,7 +214,7 @@ int main(void)
 				  break;
 			  }
 
-			  else if (HAL_GetTick() - picture_delay_start >= (uint32_t)picture_delay_mins * MIN_INTERVAL * 60 * 1000)		// Has the delay passed?
+			  else if (current_ts_sec - board_status.delayed_start >= delayed_sec)			// Has the delay passed?
 			  {
 				  current_command_pointer = GetCommand(CMD_TAKE_PICTURE_BURST_ID);			// CMD_TakePictureBurst()
 				  cmd_ret = ExecuteCommand(current_command_pointer, instr_opcode);			// Take a picture
@@ -222,7 +223,7 @@ int main(void)
 
 				  Log("Going IDLE...\r\n");
 				  board_status.state = STATE_IDLE;				// No point in transmitting response, as satellite will not be over GS
-				  delayed_flag = 0;
+				  board_status.delayed_flag = 0;				// Reset flag on state exit
 			  }
 			  break;
 		  // **************************************************************************************************************************************************

@@ -8,9 +8,7 @@
   ******************************************************************************
   */
 #include "irq.h"
-
-extern UART_HandleTypeDef huart1;
-extern DCMI_HandleTypeDef hdcmi;
+#include "main.h"
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {

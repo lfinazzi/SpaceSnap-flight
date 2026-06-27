@@ -27,6 +27,9 @@
 #define CAM_I2C_TIMEOUT			(100U)		  	// Timeout for I2C2
 #define DCMI_TIMEOUT 			(500U)			// Timeout for DCMI interface, expected transfer time is approx 20 ms
 
+extern volatile uint8_t dcmi_frame_ready;
+extern volatile uint8_t dcmi_error;
+
 /* DEFAULTS for black filtering and advanced photo settings */
 
 // These settings give ~18-19 counts for black pixels (lens cap on)

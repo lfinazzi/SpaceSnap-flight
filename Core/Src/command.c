@@ -8,21 +8,14 @@
   ******************************************************************************
   */
 #include "command.h"
-#include "photo.h"
-#include "status.h"
-#include "sram.h"
-#include "fram.h"
-#include "comms.h"
-#include "fram.h"
+#include "main.h"
+#include "fw_version.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "stm32f2xx_hal.h"
-
-extern IWDG_HandleTypeDef hiwdg;
-extern UART_HandleTypeDef huart4;
 
 // Command table — add new entries here, matching the extern declaration in command.h, for variable return size, change here!
 const command_t command_table[] = {
@@ -53,12 +46,6 @@ const uint16_t COMMAND_COUNT = sizeof(command_table) / sizeof(command_table[0]);
 
 const command_t* current_command_pointer = NULL;
 CMD_ReturnStatus cmd_ret;
-
-uint32_t picture_delay_start = 0;				// Moment the delayed photo instruction was executed
-uint8_t picture_delay_mins = 0;					// Amount of N-minute intervals to take a delayed photo
-uint8_t delayed_flag = 0;						// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
-
-extern fw_backup_info_t fw_backup_info;
 
 void ReturnCode(CMD_ReturnStatus st)
 {
@@ -362,14 +349,18 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 			Log("Black filtering activated\r\n");
 			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
 				ret = Photo_CaptureRawBlack(buffer_number+i, board_status.photos_taken, opcode, tries, black_fraction);
-				Log("Waiting...\r\n");
-				delay_kick_wdg(board_status.delayed_params.time_between_photos);
 
 				if(ret != HAL_OK){
 					Log("CAMA: photo capture FAILED\r\n");
 					DeactivateCAMA();
 					CMD_PopulateEcho(opcode);
 					return CMD_CAM_DCMI_ERROR;
+				}
+
+				if(board_status.delayed_params.num_photos != 1) {		// Only wait if many pictures incoming
+					Log("Waiting...\r\n");
+					delay_kick_wdg(board_status.delayed_params.time_between_photos);
+
 				}
 
 				board_status.photos_taken++; 											// Increment the number of photos taken
@@ -381,14 +372,18 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 		else {	// no black filtering!
 			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
 				ret = Photo_CaptureRaw(buffer_number+i, board_status.photos_taken, opcode);
-				Log("Waiting...\r\n");
-				delay_kick_wdg(board_status.delayed_params.time_between_photos);
 
 				if(ret != HAL_OK){
 					Log("CAMA: photo capture FAILED\r\n");
 					DeactivateCAMA();
 					CMD_PopulateEcho(opcode);
 					return CMD_CAM_DCMI_ERROR;
+				}
+
+				if(board_status.delayed_params.num_photos != 1) {		// Only wait if many pictures incoming
+					Log("Waiting...\r\n");
+					delay_kick_wdg(board_status.delayed_params.time_between_photos);
+
 				}
 
 				board_status.photos_taken++; 											// Increment the number of photos taken
@@ -427,14 +422,18 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 			Log("Black filtering activated\r\n");
 			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
 				ret = Photo_CaptureRawBlack(buffer_number+i, board_status.photos_taken, opcode, tries, black_fraction);
-				Log("Waiting...\r\n");
-				delay_kick_wdg(board_status.delayed_params.time_between_photos);
 
 				if(ret != HAL_OK){
 					Log("CAMB: photo capture FAILED\r\n");
 					DeactivateCAMB();
 					CMD_PopulateEcho(opcode);
 					return CMD_CAM_DCMI_ERROR;
+				}
+
+				if(board_status.delayed_params.num_photos != 1) {		// Only wait if many pictures incoming
+					Log("Waiting...\r\n");
+					delay_kick_wdg(board_status.delayed_params.time_between_photos);
+
 				}
 
 				board_status.photos_taken++; 											// Increment the number of photos taken
@@ -446,14 +445,18 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 		else {	// no black filtering!
 			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
 				ret = Photo_CaptureRaw(buffer_number+i, board_status.photos_taken, opcode);
-				Log("Waiting...\r\n");
-				delay_kick_wdg(board_status.delayed_params.time_between_photos);
 
 				if(ret != HAL_OK){
 					Log("CAMB: photo capture FAILED\r\n");
 					DeactivateCAMB();
 					CMD_PopulateEcho(opcode);
 					return CMD_CAM_DCMI_ERROR;
+				}
+
+				if(board_status.delayed_params.num_photos != 1) {		// Only wait if many pictures incoming
+					Log("Waiting...\r\n");
+					delay_kick_wdg(board_status.delayed_params.time_between_photos);
+
 				}
 
 				board_status.photos_taken++; 											// Increment the number of photos taken
@@ -493,14 +496,16 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
  */
 CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode)
 {
-	picture_delay_mins = opcode[4]; 						// delay is Byte 5 of opcode
-	picture_delay_start = HAL_GetTick();
+	board_status.delayed_intervals = opcode[4];
+	board_status.delayed_start = board_status.uptime_total + board_status.uptime_session / 1000;
 
 	// write tx_buffer for USS return
 	tx_buffer[1] = COMMAND_SCHEDULED;
 
 	char log_buf[64];
-    sprintf(log_buf, "Scheduling delayed photos after: %u x %umins\r\n", picture_delay_mins, MIN_INTERVAL);
+    sprintf(log_buf, "Scheduling delayed photos after: %u x %umins\r\n", board_status.delayed_intervals, MIN_INTERVAL);
+    Log(log_buf);
+    sprintf(log_buf, "Current timestamp: %lu s\r\n", board_status.delayed_start);
     Log(log_buf);
 
 	CMD_PopulateEcho(opcode);
@@ -1009,8 +1014,6 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 		return CMD_CONFIRM_FAILED;
 	}
 
-	extern uint32_t _app_flash_start;
-	extern uint32_t _app_flash_end;
 	uint32_t app_start = (uint32_t)&_app_flash_start;
 	uint32_t app_end   = (uint32_t)&_app_flash_end;
 	uint32_t app_size  = app_end - app_start;

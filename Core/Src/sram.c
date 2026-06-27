@@ -8,14 +8,10 @@
   ******************************************************************************
   */
 #include "sram.h"
-#include "status.h"
-#include "comms.h"
+#include "main.h"
 
 #include <stddef.h>
 #include <stdio.h>
-
-extern IWDG_HandleTypeDef hiwdg;
-extern UART_HandleTypeDef huart4;
 
 void TestSRAM(void)
 {

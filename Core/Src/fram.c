@@ -8,11 +8,7 @@
   ******************************************************************************
   */
 #include "fram.h"
-
-extern SPI_HandleTypeDef hspi2;
-extern IWDG_HandleTypeDef hiwdg;
-
-extern fw_backup_info_t fw_backup_info;
+#include "status.h"
 
 void FRAM_WriteByte(uint32_t addr, uint8_t data)
 {

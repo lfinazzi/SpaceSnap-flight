@@ -11,7 +11,6 @@
 #define __COMMAND_H__
 
 #include <stdint.h>
-#include "fw_version.h"
 
 #define HAS_OPCODE 									(1U) 		// Command has opcode
 #define NO_OPCODE 									(0U) 		// Command has no opcode
@@ -37,11 +36,6 @@
 #define COMMAND_PARAM_INVALID						(85U)		// Invalid value for parameter in command
 
 #define MIN_INTERVAL 						 		(1U) 		// Minutes in interval for STATE_DELAYED_PICTURE (max. waiting is 256*MIN_INTERVAL minutes)
-
-
-extern uint32_t picture_delay_start;							// Moment the delayed photo instruction was executed
-extern uint8_t picture_delay_mins;								// Amount of N-minute intervals to take a delayed photo
-extern uint8_t delayed_flag;									// Flag used to transmit scheduled command buffer for CMD_TakeDelayedPicture() only once
 
 
 // Definition of command IDs, starting at 0x33 are mission commands, starting at 0x11 are debug commands, 0x88 start of danger zone command
