@@ -8,10 +8,13 @@
   ******************************************************************************
   */
 #include "sram.h"
+#include "status.h"
+#include "comms.h"
 #include "main.h"
 
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 void TestSRAM(void)
 {

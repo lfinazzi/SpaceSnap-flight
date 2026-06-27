@@ -11,9 +11,8 @@
 #define __STATUS_H__
 
 #include "command.h"
-#include "fram.h"
 #include "comms.h"
-#include "main.h"
+#include "sram.h"
 
 #define MAX_COMPRESSED_PHOTOS           (100U)				// Maximum number of compressions possible
 
@@ -39,7 +38,7 @@ typedef struct __attribute__((packed)) {
 } compression_index_entry_t;
 
 
-// Useful parameters that can be requested in flight to assess board status
+// Useful parameters that can be requested in flight to assess board status, TODO: Validate everything prints ok and no problems with these changes
 // VOLATILE members are updated once on boot
 typedef struct {
 
@@ -164,4 +163,4 @@ void LogBoardStatus(void);
 void LogBoardStatusFull(void);
 
 
-#endif
+#endif	/* __STATUS_H__ */

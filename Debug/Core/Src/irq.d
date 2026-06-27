@@ -1,4 +1,4 @@
-Core/Src/irq.o: ../Core/Src/irq.c ../Core/Inc/irq.h ../Core/Inc/main.h \
+Core/Src/irq.o: ../Core/Src/irq.c ../Core/Inc/irq.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h \
  ../Core/Inc/stm32f2xx_hal_conf.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_rcc.h \
@@ -34,12 +34,9 @@ Core/Src/irq.o: ../Core/Src/irq.c ../Core/Inc/irq.h ../Core/Inc/main.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim_ex.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h \
- ../Core/Inc/sram.h ../Core/Inc/photo.h ../Core/Inc/command.h \
- ../Core/Inc/fram.h ../Core/Inc/status.h ../Core/Inc/comms.h \
- ../Core/Inc/irq.h ../Core/Inc/gpio.h ../Core/Inc/telemetry.h \
- ../Core/Inc/main.h
+ ../Core/Inc/comms.h ../Core/Inc/command.h ../Core/Inc/photo.h \
+ ../Core/Inc/photo.h ../Core/Inc/main.h
 ../Core/Inc/irq.h:
-../Core/Inc/main.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h:
 ../Core/Inc/stm32f2xx_hal_conf.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_rcc.h:
@@ -75,13 +72,8 @@ Core/Src/irq.o: ../Core/Src/irq.c ../Core/Inc/irq.h ../Core/Inc/main.h \
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim_ex.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h:
-../Core/Inc/sram.h:
-../Core/Inc/photo.h:
-../Core/Inc/command.h:
-../Core/Inc/fram.h:
-../Core/Inc/status.h:
 ../Core/Inc/comms.h:
-../Core/Inc/irq.h:
-../Core/Inc/gpio.h:
-../Core/Inc/telemetry.h:
+../Core/Inc/command.h:
+../Core/Inc/photo.h:
+../Core/Inc/photo.h:
 ../Core/Inc/main.h:

@@ -11,9 +11,6 @@
 #define __SRAM_H__
 
 #include "photo.h"
-#include "stm32f2xx_hal.h"
-
-#include <stdint.h>
 
 /* --- Raw frame pool ------------------------------------------------ */
 #define RAW_PHOTO_BASE_ADDRESS          		(0x68000000U)				// NOR SRAM BANK 3 - Start of raw buffers
@@ -115,4 +112,5 @@ void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes);
  ********************************************************************************/
 void ResetVolatileStatus(void);
 
-#endif
+
+#endif	/* __SRAM_H__ */

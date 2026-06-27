@@ -1,2 +1,2 @@
-../Core/Src/telemetry.c:13:6:CheckResetCause	8	static
-../Core/Src/telemetry.c:49:6:Read_MCU_ADC_Vals	8	static
+../Core/Src/telemetry.c:16:6:CheckResetCause	8	static
+../Core/Src/telemetry.c:52:6:Read_MCU_ADC_Vals	8	static

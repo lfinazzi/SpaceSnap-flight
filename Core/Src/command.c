@@ -8,6 +8,11 @@
   ******************************************************************************
   */
 #include "command.h"
+#include "status.h"
+#include "fram.h"
+#include "sram.h"
+#include "photo.h"
+#include "comms.h"
 #include "main.h"
 #include "fw_version.h"
 

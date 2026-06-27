@@ -11,6 +11,7 @@
 #define __COMMS_H__
 
 #include "command.h"
+#include "photo.h"
 #include <stdint.h>
 
 
@@ -302,4 +303,4 @@ void LogCompFrameDebug(uint8_t index, uint32_t offset, uint32_t header_size, uin
  ********************************************************************************/
 void CMD_PopulateEcho(uint8_t *opcode);
 
-#endif
+#endif	/* __COMMS_H__ */

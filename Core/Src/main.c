@@ -15,7 +15,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "comms.h"
+#include "status.h"
+#include "fram.h"
+#include "telemetry.h"
+#include "sram.h"
+#include "gpio.h"
+#include "command.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

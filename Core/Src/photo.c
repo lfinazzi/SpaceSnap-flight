@@ -9,7 +9,11 @@
   */
 #include "photo.h"
 #include "comms.h"
+#include "status.h"
+#include "sram.h"
 #include "main.h"
+
+#include <stdio.h>
 
 #define TJE_IMPLEMENTATION
 #include <tiny_jpeg.h>

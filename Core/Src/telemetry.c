@@ -7,6 +7,9 @@
   *
   ******************************************************************************
   */
+#include "telemetry.h"
+#include "status.h"
+#include "comms.h"
 #include "main.h"
 
 

@@ -13,4 +13,4 @@
 #define VERSION_MAJOR		(uint16_t)(0U)
 #define VERSION_MINOR		(uint16_t)(10U)
 
-#endif
+#endif	/* __FW_VERSION_H__ */

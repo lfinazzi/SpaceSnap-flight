@@ -676,4 +676,4 @@ extern const command_t command_table[];
 // variable that stores number of available commands
 extern const uint16_t COMMAND_COUNT;
 
-#endif
+#endif	/* __COMMAND_H__ */

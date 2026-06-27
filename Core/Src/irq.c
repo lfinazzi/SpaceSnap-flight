@@ -8,6 +8,8 @@
   ******************************************************************************
   */
 #include "irq.h"
+#include "comms.h"
+#include "photo.h"
 #include "main.h"
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)

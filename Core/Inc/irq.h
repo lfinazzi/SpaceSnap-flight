@@ -11,7 +11,7 @@
 #define __IRQ_H__
 
 #include <stdint.h>
-#include "main.h"
+#include "stm32f2xx_hal.h"
 
 
 /********************************************************************************
@@ -75,4 +75,4 @@ void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi);
 void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi);
 
 
-#endif
+#endif	/* __IRQ_H__ */

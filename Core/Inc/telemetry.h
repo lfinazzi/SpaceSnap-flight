@@ -16,8 +16,6 @@
 #define ADC_MAX_VALUE          				4095.0f
 #define VREFINT_CAL							1.21f	// VREFINT, from table 70 in STM32Fxx reference guide (typ.)
 
-#include "stm32f2xx_hal.h"
-
 
 /********************************************************************************
  * @brief  Checks RCC reset-cause flags on bootup and updates board_status
@@ -65,4 +63,4 @@ void CheckResetCause(void);
 void Read_MCU_ADC_Vals(void);
 
 
-#endif
+#endif	/* __TELEMETRY_H__ */

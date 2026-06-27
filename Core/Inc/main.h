@@ -31,19 +31,6 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "sram.h"
-#include "fram.h"
-#include "command.h"
-#include "photo.h"
-#include "comms.h"
-#include "status.h"
-#include "irq.h"
-#include "gpio.h"
-#include "telemetry.h"
-
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

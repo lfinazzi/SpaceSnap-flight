@@ -9,7 +9,10 @@
   */
 #include "status.h"
 #include "comms.h"
+#include "telemetry.h"
 #include "main.h"
+
+#include <stdio.h>
 
 // Saves current board status
 board_status_t board_status = {0};

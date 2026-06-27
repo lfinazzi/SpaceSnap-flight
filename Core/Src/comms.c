@@ -7,7 +7,13 @@
   *
   ******************************************************************************
   */
+#include "comms.h"
+#include "status.h"
+#include "photo.h"
 #include "main.h"
+
+#include <stdio.h>
+#include <string.h>
 
 volatile uint8_t rx_buffer[AIRMAC_SIZE+1] = {0}; 		// EnduroSat RS-485 incoming buffer
 uint8_t tx_buffer[AIRMAC_SIZE] = {0};					// EnduroSat RS-485 outgoing buffer

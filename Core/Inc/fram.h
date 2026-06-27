@@ -11,7 +11,6 @@
 #define __FRAM_H__
 
 #include <stdint.h>
-#include "main.h"
 #include "status.h"
 
 #define BOARD_STATUS_START 				(0x000000)													// Address to save board status
@@ -27,10 +26,6 @@
 
 #define FIRMWARE_BACKUP_START 			((END_OF_FRAM) - (FIRMWARE_BACKUP_SIZE))
 #define FIRMWARE_IMAGE_START            ((FIRMWARE_BACKUP_START) + (sizeof(fw_backup_info_t)))
-
-// Pin PB12
-#define FRAM_CS_LOW()   				HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_RESET)
-#define FRAM_CS_HIGH()  				HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_SET)
 
 #define FRAM_CMD_WREN   				(0x06U)  	// Write Enable
 #define FRAM_CMD_WRITE  				(0x02U)  	// Write Memory
@@ -230,4 +225,4 @@ void EraseCompressions(void);
 void SaveFRAM_Unlocked(uint8_t *buffer, uint32_t size, uint32_t fram_address);
 
 
-#endif
+#endif	/* __FRAM_H__ */

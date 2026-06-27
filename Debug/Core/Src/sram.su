@@ -1,4 +1,4 @@
-../Core/Src/sram.c:16:6:TestSRAM	32	static
-../Core/Src/sram.c:54:6:DumpRawBuffer	296	static
-../Core/Src/sram.c:90:6:DumpCompressedBuffer	296	static
-../Core/Src/sram.c:125:6:ResetVolatileStatus	8	static
+../Core/Src/sram.c:19:6:TestSRAM	32	static
+../Core/Src/sram.c:57:6:DumpRawBuffer	296	static
+../Core/Src/sram.c:93:6:DumpCompressedBuffer	296	static
+../Core/Src/sram.c:128:6:ResetVolatileStatus	8	static

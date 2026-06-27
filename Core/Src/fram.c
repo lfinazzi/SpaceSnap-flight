@@ -9,6 +9,14 @@
   */
 #include "fram.h"
 #include "status.h"
+#include "main.h"
+
+#include <stdio.h>
+#include <string.h>
+
+// Pin PB12 — CS macros are implementation details, defined here not in the header
+#define FRAM_CS_LOW()   HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_RESET)
+#define FRAM_CS_HIGH()  HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_SET)
 
 void FRAM_WriteByte(uint32_t addr, uint8_t data)
 {

@@ -539,4 +539,4 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
                                         uint8_t   black_fraction);
 
 
-#endif
+#endif	/* __PHOTO_H__ */
