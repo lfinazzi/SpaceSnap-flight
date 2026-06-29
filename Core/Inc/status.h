@@ -23,6 +23,11 @@
 #define RESET_CAUSE_IWDG       			(4U)
 #define RESET_CAUSE_LOWPOWER       		(5U)
 
+/* In status.h - redundant state shadows, NOT in board_status_t */
+extern uint8_t state_shadow_b;
+extern uint8_t state_shadow_c;
+
+
 
 typedef struct __attribute__((packed)) {
     uint32_t fw_backup_size;   		// Size in bytes of main application backup in FRAM
@@ -38,7 +43,7 @@ typedef struct __attribute__((packed)) {
 } compression_index_entry_t;
 
 
-// Useful parameters that can be requested in flight to assess board status, TODO: Validate everything prints ok and no problems with these changes
+// Useful parameters that can be requested in flight to assess board status
 // VOLATILE members are updated once on boot
 typedef struct {
 
@@ -65,7 +70,9 @@ typedef struct {
     uint8_t fram_ok;					 			// FRAM init ok
     uint8_t sram_ok;					 			// SRAM init ok
 
-    // Last command - VOLATILE
+    uint8_t state_vote_fail_count;					// Increments by one on app_state majority vote count
+
+    // Last command - NON-VOLATILE
     uint8_t  last_instruction;           			// last instruction number received
     uint8_t  last_cmd_status;            			// CMD_OK, CMD_ERROR, etc.
     uint8_t  last_opcode[OPCODE_SIZE];   			// Last opcode received
@@ -97,6 +104,7 @@ typedef struct {
     uint32_t delayed_start;							// Board timestamp when delayed request started (seconds)
     uint8_t delayed_intervals;						// Minutes after start to execute photo capture (mins)
     uint8_t delayed_flag;							// Indicates if instruction was not requested in this boot session
+
 
     // State tracking
     app_state_t state;								// Tracks actual board state, system can recover in STATE_SCHEDULED in case of power off

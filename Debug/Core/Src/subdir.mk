@@ -12,6 +12,7 @@ C_SRCS += \
 ../Core/Src/irq.c \
 ../Core/Src/main.c \
 ../Core/Src/photo.c \
+../Core/Src/protection.c \
 ../Core/Src/sram.c \
 ../Core/Src/status.c \
 ../Core/Src/stm32f2xx_hal_msp.c \
@@ -29,6 +30,7 @@ C_DEPS += \
 ./Core/Src/irq.d \
 ./Core/Src/main.d \
 ./Core/Src/photo.d \
+./Core/Src/protection.d \
 ./Core/Src/sram.d \
 ./Core/Src/status.d \
 ./Core/Src/stm32f2xx_hal_msp.d \
@@ -46,6 +48,7 @@ OBJS += \
 ./Core/Src/irq.o \
 ./Core/Src/main.o \
 ./Core/Src/photo.o \
+./Core/Src/protection.o \
 ./Core/Src/sram.o \
 ./Core/Src/status.o \
 ./Core/Src/stm32f2xx_hal_msp.o \
@@ -63,7 +66,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/command.cyclo ./Core/Src/command.d ./Core/Src/command.o ./Core/Src/command.su ./Core/Src/comms.cyclo ./Core/Src/comms.d ./Core/Src/comms.o ./Core/Src/comms.su ./Core/Src/fram.cyclo ./Core/Src/fram.d ./Core/Src/fram.o ./Core/Src/fram.su ./Core/Src/gpio.cyclo ./Core/Src/gpio.d ./Core/Src/gpio.o ./Core/Src/gpio.su ./Core/Src/irq.cyclo ./Core/Src/irq.d ./Core/Src/irq.o ./Core/Src/irq.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/photo.cyclo ./Core/Src/photo.d ./Core/Src/photo.o ./Core/Src/photo.su ./Core/Src/sram.cyclo ./Core/Src/sram.d ./Core/Src/sram.o ./Core/Src/sram.su ./Core/Src/status.cyclo ./Core/Src/status.d ./Core/Src/status.o ./Core/Src/status.su ./Core/Src/stm32f2xx_hal_msp.cyclo ./Core/Src/stm32f2xx_hal_msp.d ./Core/Src/stm32f2xx_hal_msp.o ./Core/Src/stm32f2xx_hal_msp.su ./Core/Src/stm32f2xx_it.cyclo ./Core/Src/stm32f2xx_it.d ./Core/Src/stm32f2xx_it.o ./Core/Src/stm32f2xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32f2xx.cyclo ./Core/Src/system_stm32f2xx.d ./Core/Src/system_stm32f2xx.o ./Core/Src/system_stm32f2xx.su ./Core/Src/telemetry.cyclo ./Core/Src/telemetry.d ./Core/Src/telemetry.o ./Core/Src/telemetry.su
+	-$(RM) ./Core/Src/command.cyclo ./Core/Src/command.d ./Core/Src/command.o ./Core/Src/command.su ./Core/Src/comms.cyclo ./Core/Src/comms.d ./Core/Src/comms.o ./Core/Src/comms.su ./Core/Src/fram.cyclo ./Core/Src/fram.d ./Core/Src/fram.o ./Core/Src/fram.su ./Core/Src/gpio.cyclo ./Core/Src/gpio.d ./Core/Src/gpio.o ./Core/Src/gpio.su ./Core/Src/irq.cyclo ./Core/Src/irq.d ./Core/Src/irq.o ./Core/Src/irq.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/photo.cyclo ./Core/Src/photo.d ./Core/Src/photo.o ./Core/Src/photo.su ./Core/Src/protection.cyclo ./Core/Src/protection.d ./Core/Src/protection.o ./Core/Src/protection.su ./Core/Src/sram.cyclo ./Core/Src/sram.d ./Core/Src/sram.o ./Core/Src/sram.su ./Core/Src/status.cyclo ./Core/Src/status.d ./Core/Src/status.o ./Core/Src/status.su ./Core/Src/stm32f2xx_hal_msp.cyclo ./Core/Src/stm32f2xx_hal_msp.d ./Core/Src/stm32f2xx_hal_msp.o ./Core/Src/stm32f2xx_hal_msp.su ./Core/Src/stm32f2xx_it.cyclo ./Core/Src/stm32f2xx_it.d ./Core/Src/stm32f2xx_it.o ./Core/Src/stm32f2xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32f2xx.cyclo ./Core/Src/system_stm32f2xx.d ./Core/Src/system_stm32f2xx.o ./Core/Src/system_stm32f2xx.su ./Core/Src/telemetry.cyclo ./Core/Src/telemetry.d ./Core/Src/telemetry.o ./Core/Src/telemetry.su
 
 .PHONY: clean-Core-2f-Src
 

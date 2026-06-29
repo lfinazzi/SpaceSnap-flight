@@ -5,6 +5,7 @@
 "./Core/Src/irq.o"
 "./Core/Src/main.o"
 "./Core/Src/photo.o"
+"./Core/Src/protection.o"
 "./Core/Src/sram.o"
 "./Core/Src/status.o"
 "./Core/Src/stm32f2xx_hal_msp.o"

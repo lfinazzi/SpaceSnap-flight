@@ -10,6 +10,7 @@
 #include "fram.h"
 #include "status.h"
 #include "main.h"
+#include "protection.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -130,12 +131,15 @@ void LoadBoardStatusFRAM(void)
 		// reads backup size and crc from FRAM
 		ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_size, sizeof(uint32_t), FIRMWARE_BACKUP_START);
 		ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_crc32, sizeof(uint32_t), FIRMWARE_BACKUP_START + sizeof(uint32_t));
+		ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_version, sizeof(uint32_t), FIRMWARE_BACKUP_START + 2*sizeof(uint32_t));
 
 		// Increment boot count and save back
         board_status.fram_ok = 1;
 	}
 
 	board_status.boot_count++;
+
+	SetState(board_status.state);
     SaveBoardStatusFRAM();
 }
 
@@ -155,7 +159,7 @@ void EraseFRAM(void)
 	board_status.compression_ptr_address = PHOTO_DATA_START;		// point compression_ptr to the correct address (first address)
 	board_status.fram_bytes_left = FIRMWARE_BACKUP_START - board_status.compression_ptr_address;		// All bytes available
 
-	board_status.state = STATE_IDLE;
+	SetState(STATE_IDLE);
 
 	// Default cam parameter values
 	board_status.cam_params.black_threshold = BLACK_THRESHOLD_DEFAULT;

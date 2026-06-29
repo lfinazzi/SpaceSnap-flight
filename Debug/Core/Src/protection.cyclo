@@ -1,0 +1,2 @@
+../Core/Src/protection.c:4:6:SetState	1
+../Core/Src/protection.c:11:9:GetState	4

@@ -131,7 +131,7 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
     if (command->instruction_number != CMD_GET_STATUS_ID){
     	board_status.last_instruction = instr_number;
     	board_status.last_cmd_status = st;											// Logs last command return executed
-    	memcpy(board_status.last_opcode, opcode, OPCODE_SIZE);		// Logs last command opcode
+    	memcpy(board_status.last_opcode, opcode, OPCODE_SIZE);						// Logs last command opcode
     }
     return st;
 }
@@ -362,10 +362,12 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 					return CMD_CAM_DCMI_ERROR;
 				}
 
-				if(board_status.delayed_params.num_photos != 1) {		// Only wait if many pictures incoming
+				if(i == board_status.delayed_params.num_photos-1){		// Don't wait after taking last picture in burst
+					Log("Burst finished...\r\n");
+				}
+				else {
 					Log("Waiting...\r\n");
 					delay_kick_wdg(board_status.delayed_params.time_between_photos);
-
 				}
 
 				board_status.photos_taken++; 											// Increment the number of photos taken
@@ -385,10 +387,12 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 					return CMD_CAM_DCMI_ERROR;
 				}
 
-				if(board_status.delayed_params.num_photos != 1) {		// Only wait if many pictures incoming
+				if(i == board_status.delayed_params.num_photos-1){		// Don't wait after taking last picture in burst
+					Log("Burst finished...\r\n");
+				}
+				else {
 					Log("Waiting...\r\n");
 					delay_kick_wdg(board_status.delayed_params.time_between_photos);
-
 				}
 
 				board_status.photos_taken++; 											// Increment the number of photos taken
@@ -435,10 +439,12 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 					return CMD_CAM_DCMI_ERROR;
 				}
 
-				if(board_status.delayed_params.num_photos != 1) {		// Only wait if many pictures incoming
+				if(i == board_status.delayed_params.num_photos-1){		// Don't wait after taking last picture in burst
+					Log("Burst finished...\r\n");
+				}
+				else {
 					Log("Waiting...\r\n");
 					delay_kick_wdg(board_status.delayed_params.time_between_photos);
-
 				}
 
 				board_status.photos_taken++; 											// Increment the number of photos taken
@@ -458,10 +464,12 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 					return CMD_CAM_DCMI_ERROR;
 				}
 
-				if(board_status.delayed_params.num_photos != 1) {		// Only wait if many pictures incoming
+				if(i == board_status.delayed_params.num_photos-1){		// Don't wait after taking last picture in burst
+					Log("Burst finished...\r\n");
+				}
+				else {
 					Log("Waiting...\r\n");
 					delay_kick_wdg(board_status.delayed_params.time_between_photos);
-
 				}
 
 				board_status.photos_taken++; 											// Increment the number of photos taken
@@ -482,11 +490,63 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 
 	// Does user want automatic compressions?
 	if (board_status.delayed_params.perform_compressions == 1) {
+		compressed_photo_t *compression = COMPRESSED_BUFFER(0);
 		Log("Performing compressions!\r\n");
 		for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// compresses all photos
 			sprintf(log_buf, "Compression %u: \r\n", i);
 			Log(log_buf);
-			CompressRawPhoto(buffer_number+i, board_status.delayed_params.compression_quality);
+			ret = CompressRawPhoto(buffer_number+i, board_status.delayed_params.compression_quality);
+			if (ret == 0){		// Compression failed
+				Log("Compression error!\r\n");
+				CMD_PopulateEcho(opcode);
+				return CMD_COMPRESS_ERROR;
+			}
+
+			// Saves compression in FRAM and advances status pointer
+			uint32_t jpeg_size = ((uint32_t)compression->size_MSB << 16) | compression->size_LSB;
+			uint32_t header_size = sizeof(compressed_photo_t) - sizeof(compression->data);
+			uint32_t total_size  = header_size + jpeg_size;
+
+			if (board_status.compression_ptr_address + total_size > FIRMWARE_BACKUP_START) {		// Checks if FRAM will overflow allowed space (before FW backup start)
+				Log("FRAM full — cannot save compression.\r\n");
+				CMD_PopulateEcho(opcode);
+				return CMD_FRAM_FULL;
+			}
+
+			if (board_status.compression_count >= MAX_COMPRESSED_PHOTOS) {
+				Log("Compression index full.\r\n");
+				CMD_PopulateEcho(opcode);
+				return CMD_INDEX_FULL;
+			}
+
+			uint16_t idx = board_status.compression_count;
+			compression_table[idx].fram_address = board_status.compression_ptr_address;
+			compression_table[idx].total_size   = total_size;
+			compression_table[idx].valid        = 1;
+
+			char log_buf[96];
+			sprintf(log_buf, "Index[%u].fram_address = 0x%06lX\r\n", idx, compression_table[idx].fram_address);
+			Log(log_buf);
+
+			// Save header (everything before data[])
+			SaveBufferFRAM((uint8_t *)compression, header_size, board_status.compression_ptr_address);
+			board_status.compression_ptr_address += header_size;
+
+			// Save JPEG data
+			SaveBufferFRAM(compression->data, jpeg_size, board_status.compression_ptr_address);
+			board_status.compression_ptr_address += jpeg_size;
+
+			if (board_status.compression_ptr_address <= FIRMWARE_BACKUP_START) {
+				board_status.fram_bytes_left = FIRMWARE_BACKUP_START - board_status.compression_ptr_address;
+			} else {
+				board_status.fram_bytes_left = 0;   // shouldn't happen, but avoids unsigned underflow if it does
+				Log("WARNING: compression_ptr_address exceeds FIRMWARE_BACKUP_START!\r\n");
+			}
+
+			// Increment number of compressions in memory by one
+			board_status.compression_count++;		// compressions in memory currently
+			board_status.compressions_done++;		// total compressions done
+			board_status.compression_buffer_occupied = 1;
 		}
 	}
 
@@ -1094,7 +1154,7 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 		FRAM_WriteByte(FIRMWARE_BACKUP_START + i, p[i]);
 	}
 
-	sprintf(log_buf, "Firmware backup complete: size=%lu crc=0x%08lX\r\n", app_size, final_crc);
+	sprintf(log_buf, "Firmware backup complete: size=%lu crc=0x%08lX, version=%u.%u\r\n", app_size, final_crc, VERSION_MAJOR, VERSION_MINOR);
 	Log(log_buf);
 
 	CMD_PopulateEcho(opcode);

@@ -134,10 +134,10 @@ void ResetVolatileStatus(void)
 	// reset uptime
 	board_status.uptime_session = 0;
 
-	// reset last instruction metadata saved in FRAM
-	board_status.last_instruction = 0;
-	board_status.last_cmd_status = 0;
-	memset(board_status.last_opcode, 0x00, OPCODE_SIZE);
+	// reset last instruction metadata saved in FRAM - For now this is not erased to recover from power down scenario
+	//board_status.last_instruction = 0;
+	//board_status.last_cmd_status = 0;
+	//memset(board_status.last_opcode, 0x00, OPCODE_SIZE);
 	return;
 }
 

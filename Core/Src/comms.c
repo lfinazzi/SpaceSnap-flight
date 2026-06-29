@@ -11,6 +11,7 @@
 #include "status.h"
 #include "photo.h"
 #include "main.h"
+#include "protection.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -41,30 +42,9 @@ void Log(char *message)
 
 void PrintBanner(void)
 {
+	// TODO: Cool banner
     const char *banner =
-        "\r\n"
-		"	 .d8888b.                                     .d8888b.                              \r\n"
-		"	d88P  Y88b                                   d88P  Y88b                             \r\n"
-		"	Y88b.                                        Y88b.                                  \r\n"
-		"	 \"Y888b.   88888b.   8888b.   .d8888b .d88b.  \"Y888b.   88888b.   8888b.  88888b.   \r\n"
-		"		\"Y88b. 888 \"88b     \"88b d88P\"   d8P  Y8b    \"Y88b. 888 \"88b     \"88b 888 \"88b  \r\n"
-		"		  \"888 888  888 .d888888 888     88888888      \"888 888  888 .d888888 888  888  \r\n"
-		"	Y88b  d88P 888 d88P 888  888 Y88b.   Y8b.    Y88b  d88P 888  888 888  888 888 d88P  \r\n"
-		"	 \"Y8888P\"  88888P\"  \"Y888888  \"Y8888P \"Y8888  \"Y8888P\"  888  888 \"Y888888 88888P\"   \r\n"
-		"			   888                                                            888       \r\n"
-		"			   888                                                            888       \r\n"
-		"			   888                                                            888  	 	\r\n"
-		"																						\r\n"
-		"+-------------------------------------------------------------------------------------+\r\n"
-		"|                   			 Earth Observation Payload                  		   |\r\n"
-		"+-------------------------------------------------------------------------------------+\r\n"
-		"|  Platform  : STM32                                                                  |\r\n"
-		"|  Sensor    : ASX340AT | PAL 640x480 | YCbCr 4:2:2                       		       |\r\n"
-		"|  Codec     : TinyJPEG | Storage: SRAM + FRAM                                        |\r\n"
-		"|  Developer : Lucas Finazzi                                                          |\r\n"
-		"|                                                                                     |\r\n"
-		"+=====================================================================================+\r\n"
-		"\r\n"
+        "SpaceSnap\r\n"
     ;
 
     HAL_UART_Transmit(&huart4, (uint8_t *)banner, strlen(banner), HAL_MAX_DELAY);
@@ -112,8 +92,9 @@ CMD_ReturnStatus LoadInstructionBuffer(void)
 {
 	instr_number = rx_buffer[RX_HEADER_SIZE];
 
-	if (instr_number != CMD_GET_STATUS_ID)							// Saves last command ID
-	        board_status.last_instruction = instr_number;
+	if (instr_number != CMD_GET_STATUS_ID) {					// Saves last command ID and opcode
+    	board_status.last_instruction = instr_number;
+	}
 	const command_t* cmd = GetCommand(instr_number);
 	if (cmd == NULL){
 		tx_buffer[1] = COMMAND_NOT_FOUND_FAILURE;
@@ -154,17 +135,17 @@ CMD_ReturnStatus LoadInstructionBuffer(void)
 void HandleIncomingCommand(app_state_t fallback_state)
 {
 	rx_flag = 0;
-	if (*rx_buffer == USS_ID && board_status.state != STATE_IGNORE){
+	if (*rx_buffer == USS_ID && GetState() != STATE_IGNORE){
 	  if(board_status.delayed_flag == 1){ // USS was in STATE_DELAYED_PICTURE
 		  board_status.delayed_flag = 0;
 		  Log("Canceling scheduled photo...\r\n");
 	  }
 	  Log("Received valid USS request\r\n");
-	  cmd_ret = LoadInstructionBuffer();									// Loads the instruction buffer - 1B instruction + 5B opcode
-	  rx_flag = 0;															// Resets rx_flag for next command
-	  if(cmd_ret == CMD_OK) board_status.state = STATE_EXECUTE_COMMAND;		// If not ok, ignore and return to IDLE
+	  cmd_ret = LoadInstructionBuffer();							// Loads the instruction buffer - 1B instruction + 5B opcode
+	  rx_flag = 0;													// Resets rx_flag for next command
+	  if(cmd_ret == CMD_OK) SetState(STATE_EXECUTE_COMMAND);		// If not ok, ignore and return to IDLE
 	  else{
-		  board_status.state = STATE_TRANSMIT_RESPONSE;
+		  SetState(STATE_TRANSMIT_RESPONSE);
 	  }
 	}
 	else if (*rx_buffer == LS02_ID){
@@ -173,11 +154,11 @@ void HandleIncomingCommand(app_state_t fallback_state)
 	  if(board_status.delayed_flag == 1){ 				// USS was in STATE_DELAYED_PICTURE
 		  Log("Ignoring...\r\n");
 	  }
-	  board_status.state = fallback_state;
+	  SetState(fallback_state);
 	}
 	else {
 		Log("Unknown board ID, ignoring...\r\n");
-		board_status.state = STATE_IDLE;
+		SetState(STATE_IDLE);
 	}
 }
 
@@ -228,25 +209,25 @@ void LogRawFrameDebug(uint8_t slot, uint32_t offset, uint32_t frame_size,
 	sprintf(log_buf, "remaining (before this chunk): %lu bytes\r\n", remaining);
 	Log(log_buf);
 
-	uint8_t is_final_chunk = (chunk_size < (AIRMAC_SIZE - HEADER_SIZE));
+	uint8_t is_final_chunk = (chunk_size < (AIRMAC_SIZE - DATA_HEADER_SIZE));
 	sprintf(log_buf, "final_chunk: %s\r\n", is_final_chunk ? "yes" : "no");
 	Log(log_buf);
 
 	if (is_final_chunk) {
-		uint32_t pad_bytes = (AIRMAC_SIZE - HEADER_SIZE) - chunk_size;
+		uint32_t pad_bytes = (AIRMAC_SIZE - DATA_HEADER_SIZE) - chunk_size;
 		sprintf(log_buf, "zero_pad_bytes: %lu\r\n", pad_bytes);
 		Log(log_buf);
 	}
 
 	Log("Payload hex dump (tx_buffer[2..]):\r\n");
 
-	for (uint32_t row = 0; row < (AIRMAC_SIZE - HEADER_SIZE); row += 16) {
+	for (uint32_t row = 0; row < (AIRMAC_SIZE - DATA_HEADER_SIZE); row += 16) {
 		int pos = sprintf(log_buf, "  %04lX: ", row);
 
-		uint32_t row_len = ((AIRMAC_SIZE - HEADER_SIZE) - row < 16) ? ((AIRMAC_SIZE - HEADER_SIZE) - row) : 16;
+		uint32_t row_len = ((AIRMAC_SIZE - DATA_HEADER_SIZE) - row < 16) ? ((AIRMAC_SIZE - DATA_HEADER_SIZE) - row) : 16;
 
 		for (uint32_t col = 0; col < row_len; col++) {
-			pos += sprintf(log_buf + pos, "%02X ", tx_buffer[HEADER_SIZE + row + col]);
+			pos += sprintf(log_buf + pos, "%02X ", tx_buffer[DATA_HEADER_SIZE + row + col]);
 		}
 
 		sprintf(log_buf + pos, "\r\n");
@@ -381,25 +362,25 @@ void LogCompFrameDebug(uint8_t index, uint32_t offset, uint32_t header_size, uin
 	sprintf(log_buf, "remaining (before this chunk): %lu bytes\r\n", remaining);
 	Log(log_buf);
 
-	uint8_t is_final_chunk = (chunk_size < (AIRMAC_SIZE - HEADER_SIZE));
+	uint8_t is_final_chunk = (chunk_size < (AIRMAC_SIZE - DATA_HEADER_SIZE));
 	sprintf(log_buf, "final_chunk: %s\r\n", is_final_chunk ? "yes" : "no");
 	Log(log_buf);
 
 	if (is_final_chunk) {
-		uint32_t pad_bytes = (AIRMAC_SIZE - HEADER_SIZE) - chunk_size;
+		uint32_t pad_bytes = (AIRMAC_SIZE - DATA_HEADER_SIZE) - chunk_size;
 		sprintf(log_buf, "zero_pad_bytes: %lu\r\n", pad_bytes);
 		Log(log_buf);
 	}
 
 	Log("Payload hex dump (tx_buffer[2..]):\r\n");
 
-	for (uint32_t row = 0; row < (AIRMAC_SIZE - HEADER_SIZE); row += 16) {
+	for (uint32_t row = 0; row < (AIRMAC_SIZE - DATA_HEADER_SIZE); row += 16) {
 		int pos = sprintf(log_buf, "  %04lX: ", row);
 
-		uint32_t row_len = ((AIRMAC_SIZE - HEADER_SIZE) - row < 16) ? ((AIRMAC_SIZE - HEADER_SIZE) - row) : 16;
+		uint32_t row_len = ((AIRMAC_SIZE - DATA_HEADER_SIZE) - row < 16) ? ((AIRMAC_SIZE - DATA_HEADER_SIZE) - row) : 16;
 
 		for (uint32_t col = 0; col < row_len; col++) {
-			pos += sprintf(log_buf + pos, "%02X ", tx_buffer[HEADER_SIZE + row + col]);
+			pos += sprintf(log_buf + pos, "%02X ", tx_buffer[DATA_HEADER_SIZE + row + col]);
 		}
 
 		sprintf(log_buf + pos, "\r\n");

@@ -22,6 +22,7 @@
 #include "sram.h"
 #include "gpio.h"
 #include "command.h"
+#include "protection.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -131,8 +132,9 @@ int main(void)
   MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
-  // TODO: Test new bootloader with added firmware version. Don't forget to erase FRAM!
-  PrintBanner();	// Prints boot SpaceSnap banner, TODO: See how it prints
+  // Prints boot SpaceSnap banner
+  PrintBanner();
+
   HAL_UARTEx_ReceiveToIdle_IT(&huart1, (uint8_t*) rx_buffer, AIRMAC_SIZE+1);		// Arms UART1 for IT reception
 
   // Wait for next inits
@@ -140,7 +142,7 @@ int main(void)
 
   // Loads board status saved in FRAM
   LoadBoardStatusFRAM();
-  board_status.uptime_total += board_status.uptime_session / 1000;						// Loads the previous uptime to the total_uptime variable
+  board_status.uptime_total += board_status.uptime_session / 1000;					// Loads the previous uptime to the total_uptime variable
 
   CheckResetCause();	// Checks last reset cause and loads it in board_status
 
@@ -163,7 +165,7 @@ int main(void)
   while (1)
   {
 	  HAL_IWDG_Refresh(&hiwdg); 													// Kick the IWDG once per loop
-	  switch (board_status.state) {
+	  switch (GetState()) {
 		  case STATE_IDLE:
 			  if(rx_flag){
 				  HandleIncomingCommand(STATE_IGNORE);								// Waits for command reception and modifies state accordingly
@@ -186,7 +188,7 @@ int main(void)
 				  Log("Leaving IGNORE mode.\r\n");
 				  Log("---------------------------------------------------\r\n");
 				  rx_flag = 0; 															// to avoid receiving something while blocked
-				  board_status.state = STATE_IDLE;
+				  SetState(STATE_IDLE);
 				  ignore_flag = 0;
 				  EnableListenRS485();
 			  }
@@ -196,13 +198,13 @@ int main(void)
 			  current_command_pointer = GetCommand(instr_number);					// Identifies command to execute
 			  cmd_ret = ExecuteCommand(current_command_pointer, instr_opcode);		// Executes command with opcode
 			  if (cmd_ret == CMD_SCHEDULED)
-				  board_status.state = STATE_DELAYED_PICTURE;
+				  SetState(STATE_DELAYED_PICTURE);
 			  else
-				  board_status.state = STATE_TRANSMIT_RESPONSE;
+				  SetState(STATE_TRANSMIT_RESPONSE);
 			  break;
 
 		  // **************************************************************************************************************************************************
-		  // Only the CMD_TakePictureDelayed() can make the program reach this state, TODO: Validate this new logic and test this
+		  // Only the CMD_TakePictureDelayed() can make the program reach this state
 		  case STATE_DELAYED_PICTURE:
 
 			  // Time elapsed recovers even in the case of power off. All time waited upto power off is conserved
@@ -220,15 +222,15 @@ int main(void)
 				  break;
 			  }
 
-			  else if (current_ts_sec - board_status.delayed_start >= delayed_sec)			// Has the delay passed?
+			  else if (current_ts_sec - board_status.delayed_start >= delayed_sec)					// Has the delay passed?
 			  {
-				  current_command_pointer = GetCommand(CMD_TAKE_PICTURE_BURST_ID);			// CMD_TakePictureBurst()
-				  cmd_ret = ExecuteCommand(current_command_pointer, instr_opcode);			// Take a picture
+				  current_command_pointer = GetCommand(CMD_TAKE_PICTURE_BURST_ID);					// CMD_TakePictureBurst()
+				  cmd_ret = ExecuteCommand(current_command_pointer, board_status.last_opcode);		// uses non-volatile state to recover from power down
 
 				  ResetLS02();									// Re-activates LS-02 for next incoming instruction
 
 				  Log("Going IDLE...\r\n");
-				  board_status.state = STATE_IDLE;				// No point in transmitting response, as satellite will not be over GS
+				  SetState(STATE_IDLE);							// No point in transmitting response, as satellite will not be over GS
 				  board_status.delayed_flag = 0;				// Reset flag on state exit
 			  }
 			  break;
@@ -238,11 +240,11 @@ int main(void)
 			  Log("Transmitting buffer\r\n");
 			  Log("---------------------------------------------------\r\n");
 			  TransmitBufferRS485();			// Transmits tx_buffer and resets LS-02
-			  board_status.state = STATE_IDLE;
+			  SetState(STATE_IDLE);
 			  break;
 
 		  default:
-			  board_status.state = STATE_IDLE;
+			  SetState(STATE_IDLE);
 			  break;
 	}
     /* USER CODE END WHILE */

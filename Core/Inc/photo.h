@@ -18,6 +18,12 @@
 #define L 						(640U)			// Raw image length
 #define H 						(480U)			// Raw image height
 
+/* Size of header fields before data[] and before header_crc itself */
+#define RAW_PHOTO_HEADER_SIZE   offsetof(raw_photo_t, header_crc)
+
+/* Size of header fields before data[] and before header_crc itself */
+#define COMP_PHOTO_HEADER_SIZE  offsetof(compressed_photo_t, header_crc)
+
 #define CAM_RESET_PORT  		GPIOC
 #define CAM_RESET_PIN    		GPIO_PIN_0
 
@@ -62,11 +68,12 @@ typedef struct __attribute__((packed)){
 	uint16_t timestamp_LSB;
 	uint16_t black_pixels_MSB;					// Black pixels in image
 	uint16_t black_pixels_LSB;
+	uint32_t header_crc;              			// CRC32 of all fields above this one
 	uint16_t data[L*H];               			// Image data in YCbCr 4:2:2 format
 } raw_photo_t;
 
 typedef char static_assert_raw_photo_t_size[	// Static assert that a complete photo size is as expected, number left explicit on purpose
-    (sizeof(raw_photo_t) == 614420) ? 1 : -1
+    (sizeof(raw_photo_t) == 614424) ? 1 : -1
 ];
 
 typedef struct __attribute__((packed)) {
@@ -74,7 +81,7 @@ typedef struct __attribute__((packed)) {
 	uint16_t sensor_analog_gain; 				// Fixed analog gain for advanced mode
 	uint16_t sensor_digital_gain; 				// Fixed digital gain for advanced mode
 	uint16_t sensor_coarse_exposure;			// Coarse exposure for advanced mode
-	uint16_t sensor_fine_exposure;			// Fine exposure for advanced mode
+	uint16_t sensor_fine_exposure;				// Fine exposure for advanced mode
 } cam_params_t;									// These settings are the ones that can be changed for CameraParams
 // On adding more methods, remember to initialize with default macro values and add in CMD_ChangeCamParams() to be able to change them
 
@@ -91,11 +98,12 @@ typedef struct __attribute__((packed)) {
 	uint16_t timestamp_LSB;
 	uint16_t black_pixels_MSB;					// Black pixels in image
 	uint16_t black_pixels_LSB;
+	uint32_t header_crc;              			// CRC32 of all fields above this one
 	uint8_t  data[2*L*H];    					// Image data in YCbCr 4:2:2 format, at least as big as raw photo for different qualities
 } compressed_photo_t;
 
 typedef char static_assert_compressed_photo_t_size[	// Static assert that a compressed photo size is as expected, number left explicit on purpose
-    (sizeof(compressed_photo_t) == 614428) ? 1 : -1
+    (sizeof(compressed_photo_t) == 614432) ? 1 : -1
 ];
 
 

@@ -14,10 +14,15 @@
 
 #include <stdio.h>
 
-// Saves current board status
+// Current board status and info
 board_status_t board_status = {0};
 compression_index_entry_t compression_table[MAX_COMPRESSED_PHOTOS] = {0};		// Compression table in FRAM
 fw_backup_info_t fw_backup_info;		// unmodified on init on purpose, nothing can write this value except CMD_BackupFirmware()
+
+// State shadow variables for majority vote --> Avoids corruption of state and dangerous behaviour
+uint8_t state_shadow_b = 0;
+uint8_t state_shadow_c = 0;
+
 
 
 void UpdateStatus(void)
@@ -152,7 +157,6 @@ void LogBoardStatusFull(void)
 	Log(log_buf);
 
 	// Cam parameters in memory
-
 	Log("Cam params in memory ------------------------------\r\n");
 
 	sprintf(log_buf, "Black threshold: %u\r\n", board_status.cam_params.black_threshold);
@@ -169,6 +173,22 @@ void LogBoardStatusFull(void)
             		* 1000000.0f;
 	sprintf(log_buf, "Exposure time (advanced): %.1f us\r\n", exp_time);
 	Log(log_buf);
+
+	// Delayed parameters in memory
+	Log("Delayed params in memory ------------------------------\r\n");
+
+	sprintf(log_buf, "Num. delayed photos: %u\r\n", board_status.delayed_params.num_photos);
+	Log(log_buf);
+
+	sprintf(log_buf, "Time between photos: %u s\r\n", board_status.delayed_params.time_between_photos);
+	Log(log_buf);
+
+	sprintf(log_buf, "Perform compressions?: %u\r\n", board_status.delayed_params.perform_compressions);
+	Log(log_buf);
+
+	sprintf(log_buf, "Compression quality: %u\r\n", board_status.delayed_params.compression_quality);
+	Log(log_buf);
+
 
 	sprintf(log_buf, "AirMac frame budget: %u/%u\r\n", sizeof(board_status_t) + sizeof(fw_backup_info_t) + DATA_HEADER_SIZE, AIRMAC_SIZE);
 	Log(log_buf);
