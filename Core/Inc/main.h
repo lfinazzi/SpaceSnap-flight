@@ -46,6 +46,8 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
+#define DEBUG_FAULT_INJECTION		// TODO: REMOVE FROM FLIGHT BUILD
+
 /* USER CODE END EM */
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);

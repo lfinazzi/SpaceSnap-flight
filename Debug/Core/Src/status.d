@@ -36,6 +36,7 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim_ex.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h \
  ../Core/Inc/sram.h ../Core/Inc/comms.h ../Core/Inc/telemetry.h \
+ ../Core/Inc/main.h ../Core/Inc/protection.h ../Core/Inc/status.h \
  ../Core/Inc/main.h
 ../Core/Inc/status.h:
 ../Core/Inc/command.h:
@@ -79,4 +80,7 @@ Core/Src/status.o: ../Core/Src/status.c ../Core/Inc/status.h \
 ../Core/Inc/sram.h:
 ../Core/Inc/comms.h:
 ../Core/Inc/telemetry.h:
+../Core/Inc/main.h:
+../Core/Inc/protection.h:
+../Core/Inc/status.h:
 ../Core/Inc/main.h:

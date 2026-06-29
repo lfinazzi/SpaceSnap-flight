@@ -15,6 +15,7 @@
 #include "comms.h"
 #include "main.h"
 #include "fw_version.h"
+#include "protection.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -133,6 +134,8 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
     	board_status.last_cmd_status = st;											// Logs last command return executed
     	memcpy(board_status.last_opcode, opcode, OPCODE_SIZE);						// Logs last command opcode
     }
+
+	CommitBoardStatus();		// Calculates the CRC of board_status fields in program memory, protects between end of CMD execution and end of main program loop
     return st;
 }
 
@@ -181,101 +184,53 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode)
 	        cam_number, buffer_number, filter_flag, tries, black_fraction);
 	Log(log_buf);
 
+	/* Init and activate camera */
 	HAL_StatusTypeDef ret;
-	if(cam_number == 0){
+	if (cam_number == 0) {
 		ActivateCAMA();
-
-		if (advanced_flag == 0)	{	// basic mode
-			Log("BASIC MODE SELECTED FOR CAM A\r\n");
-			ret = CAM_Init(CAM_I2C_ADDR_A);
-		}
-		else {	// advanced mode
-			Log("ADVANCED MODE SELECTED FOR CAM A\r\n");
-			ret = CAM_InitAdvanced(CAM_I2C_ADDR_A);
-		}
-
-		if(ret != HAL_OK)
-		{
-			sprintf(log_buf, "Camera A init FAILED, ret=%d\r\n", ret);
-			Log(log_buf);
+		ret = advanced_flag ? CAM_InitAdvanced(CAM_I2C_ADDR_A) : CAM_Init(CAM_I2C_ADDR_A);
+		if (ret != HAL_OK) {
+			Log("Camera A init FAILED\r\n");
 			DeactivateCAMA();
 			CMD_PopulateEcho(opcode);
 			return CMD_CAM_BOOT_ERROR;
 		}
 		Log("Camera A init OK\r\n");
-
-		if (filter_flag != 0){
-			Log("Black filtering activated\r\n");
-			if (Photo_CaptureRawBlack(buffer_number, board_status.photos_taken, opcode, tries, black_fraction) != HAL_OK) {
-				Log("CAMA: photo capture FAILED\r\n");
-				DeactivateCAMA();
-				CMD_PopulateEcho(opcode);
-				return CMD_CAM_DCMI_ERROR;
-			}
-		}
-
-		else {	// no black filtering!
-			if (Photo_CaptureRaw(buffer_number, board_status.photos_taken, opcode) != HAL_OK) {
-				Log("CAMA: photo capture FAILED\r\n");
-				DeactivateCAMA();
-				CMD_PopulateEcho(opcode);
-				return CMD_CAM_DCMI_ERROR;
-			}
-		}
-
-
-		HAL_Delay(10);
-		DeactivateCAMA();
 	}
-	else if(cam_number == 1){
+	else if (cam_number == 1) {
 		ActivateCAMB();
-
-		if (advanced_flag == 0)	{	// basic mode
-			Log("BASIC MODE SELECTED FOR CAM B\r\n");
-			ret = CAM_Init(CAM_I2C_ADDR_B);
-		}
-		else {	// advanced mode
-			Log("ADVANCED MODE SELECTED FOR CAM B\r\n");
-			ret = CAM_InitAdvanced(CAM_I2C_ADDR_B);
-		}
-
-		if(ret != HAL_OK)
-		{
-			sprintf(log_buf, "Camera B init FAILED, ret=%d\r\n", ret);
-			Log(log_buf);
+		ret = advanced_flag ? CAM_InitAdvanced(CAM_I2C_ADDR_B) : CAM_Init(CAM_I2C_ADDR_B);
+		if (ret != HAL_OK) {
+			Log("Camera B init FAILED\r\n");
 			DeactivateCAMB();
 			CMD_PopulateEcho(opcode);
 			return CMD_CAM_BOOT_ERROR;
 		}
 		Log("Camera B init OK\r\n");
-
-		if (filter_flag != 0){
-			Log("Black filtering activated\r\n");
-			if (Photo_CaptureRawBlack(buffer_number, board_status.photos_taken, opcode, tries, black_fraction) != HAL_OK) {
-				Log("CAMB: photo capture FAILED\r\n");
-				DeactivateCAMB();
-				CMD_PopulateEcho(opcode);
-				return CMD_CAM_DCMI_ERROR;
-			}
-		}
-		else {
-			if (Photo_CaptureRaw(buffer_number, board_status.photos_taken, opcode) != HAL_OK) {
-				Log("CAMB: photo capture FAILED\r\n");
-				DeactivateCAMB();
-				CMD_PopulateEcho(opcode);
-				return CMD_CAM_DCMI_ERROR;
-			}
-		}
-
-		HAL_Delay(10);
-		DeactivateCAMB();
 	}
-	else{
+	else {
 		Log("Wrong camera number!\r\n");
 		CMD_PopulateEcho(opcode);
 		return CMD_CAM_BOOT_ERROR;
 	}
 
+	if (filter_flag) {
+		ret = Photo_CaptureRawBlack(buffer_number,
+									 board_status.photos_taken,
+									 opcode, tries, black_fraction);
+	}
+	else {
+		ret = Photo_CaptureRaw(buffer_number,
+								board_status.photos_taken, opcode);
+	}
+
+	/* Deactivate whichever camera was used */
+	(cam_number == 0) ? DeactivateCAMA() : DeactivateCAMB();
+
+	if (ret != HAL_OK) {
+	    CMD_PopulateEcho(opcode);
+	    return CMD_CAM_DCMI_ERROR;
+	}
 
 	board_status.photos_taken++; 							// Increment the number of photos taken
 	board_status.raw_buffer_occupied[buffer_number] = 1;	// Buffer is now occupied
@@ -327,174 +282,52 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 			board_status.delayed_params.perform_compressions,  board_status.delayed_params.compression_quality);
 	Log(log_buf);
 
+	/* Init and activate camera */
 	HAL_StatusTypeDef ret;
-	if(cam_number == 0){
+	if (cam_number == 0) {
 		ActivateCAMA();
-
-		if (advanced_flag == 0)	{	// basic mode
-			Log("BASIC MODE SELECTED FOR CAM A\r\n");
-			ret = CAM_Init(CAM_I2C_ADDR_A);
-		}
-		else {	// advanced mode
-			Log("ADVANCED MODE SELECTED FOR CAM A\r\n");
-			ret = CAM_InitAdvanced(CAM_I2C_ADDR_A);
-		}
-
-		if(ret != HAL_OK)
-		{
-			sprintf(log_buf, "Camera A init FAILED, ret=%d\r\n", ret);
-			Log(log_buf);
+		ret = advanced_flag ? CAM_InitAdvanced(CAM_I2C_ADDR_A) : CAM_Init(CAM_I2C_ADDR_A);
+		if (ret != HAL_OK) {
+			Log("Camera A init FAILED\r\n");
 			DeactivateCAMA();
 			CMD_PopulateEcho(opcode);
 			return CMD_CAM_BOOT_ERROR;
 		}
 		Log("Camera A init OK\r\n");
-
-		if (filter_flag != 0){
-			Log("Black filtering activated\r\n");
-			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
-				ret = Photo_CaptureRawBlack(buffer_number+i, board_status.photos_taken, opcode, tries, black_fraction);
-
-				if(ret != HAL_OK){
-					Log("CAMA: photo capture FAILED\r\n");
-					DeactivateCAMA();
-					CMD_PopulateEcho(opcode);
-					return CMD_CAM_DCMI_ERROR;
-				}
-
-				if(i == board_status.delayed_params.num_photos-1){		// Don't wait after taking last picture in burst
-					Log("Burst finished...\r\n");
-				}
-				else {
-					Log("Waiting...\r\n");
-					delay_kick_wdg(board_status.delayed_params.time_between_photos);
-				}
-
-				board_status.photos_taken++; 											// Increment the number of photos taken
-				board_status.raw_buffer_occupied[buffer_number+i] = 1;					// Buffer is now occupied
-			}
-
-		}
-
-		else {	// no black filtering!
-			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
-				ret = Photo_CaptureRaw(buffer_number+i, board_status.photos_taken, opcode);
-
-				if(ret != HAL_OK){
-					Log("CAMA: photo capture FAILED\r\n");
-					DeactivateCAMA();
-					CMD_PopulateEcho(opcode);
-					return CMD_CAM_DCMI_ERROR;
-				}
-
-				if(i == board_status.delayed_params.num_photos-1){		// Don't wait after taking last picture in burst
-					Log("Burst finished...\r\n");
-				}
-				else {
-					Log("Waiting...\r\n");
-					delay_kick_wdg(board_status.delayed_params.time_between_photos);
-				}
-
-				board_status.photos_taken++; 											// Increment the number of photos taken
-				board_status.raw_buffer_occupied[buffer_number+i] = 1;					// Buffer is now occupied
-
-			}
-
-		}
-
-		HAL_Delay(10);
-		DeactivateCAMA();
 	}
-	else if(cam_number == 1){
+	else if (cam_number == 1) {
 		ActivateCAMB();
-
-		if (advanced_flag == 0)	{	// basic mode
-			Log("BASIC MODE SELECTED FOR CAM B\r\n");
-			ret = CAM_Init(CAM_I2C_ADDR_B);
-		}
-		else {	// advanced mode
-			Log("ADVANCED MODE SELECTED FOR CAM B\r\n");
-			ret = CAM_InitAdvanced(CAM_I2C_ADDR_B);
-		}
-
-		if(ret != HAL_OK)
-		{
-			sprintf(log_buf, "Camera B init FAILED, ret=%d\r\n", ret);
-			Log(log_buf);
+		ret = advanced_flag ? CAM_InitAdvanced(CAM_I2C_ADDR_B) : CAM_Init(CAM_I2C_ADDR_B);
+		if (ret != HAL_OK) {
+			Log("Camera B init FAILED\r\n");
 			DeactivateCAMB();
 			CMD_PopulateEcho(opcode);
 			return CMD_CAM_BOOT_ERROR;
 		}
 		Log("Camera B init OK\r\n");
-
-		if (filter_flag != 0){
-			Log("Black filtering activated\r\n");
-			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
-				ret = Photo_CaptureRawBlack(buffer_number+i, board_status.photos_taken, opcode, tries, black_fraction);
-
-				if(ret != HAL_OK){
-					Log("CAMB: photo capture FAILED\r\n");
-					DeactivateCAMB();
-					CMD_PopulateEcho(opcode);
-					return CMD_CAM_DCMI_ERROR;
-				}
-
-				if(i == board_status.delayed_params.num_photos-1){		// Don't wait after taking last picture in burst
-					Log("Burst finished...\r\n");
-				}
-				else {
-					Log("Waiting...\r\n");
-					delay_kick_wdg(board_status.delayed_params.time_between_photos);
-				}
-
-				board_status.photos_taken++; 											// Increment the number of photos taken
-				board_status.raw_buffer_occupied[buffer_number+i] = 1;					// Buffer is now occupied
-			}
-
-		}
-
-		else {	// no black filtering!
-			for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// Takes many photos
-				ret = Photo_CaptureRaw(buffer_number+i, board_status.photos_taken, opcode);
-
-				if(ret != HAL_OK){
-					Log("CAMB: photo capture FAILED\r\n");
-					DeactivateCAMB();
-					CMD_PopulateEcho(opcode);
-					return CMD_CAM_DCMI_ERROR;
-				}
-
-				if(i == board_status.delayed_params.num_photos-1){		// Don't wait after taking last picture in burst
-					Log("Burst finished...\r\n");
-				}
-				else {
-					Log("Waiting...\r\n");
-					delay_kick_wdg(board_status.delayed_params.time_between_photos);
-				}
-
-				board_status.photos_taken++; 											// Increment the number of photos taken
-				board_status.raw_buffer_occupied[buffer_number+i] = 1;					// Buffer is now occupied
-
-			}
-
-		}
-
-		HAL_Delay(10);
-		DeactivateCAMB();
 	}
-	else{
+	else {
 		Log("Wrong camera number!\r\n");
 		CMD_PopulateEcho(opcode);
 		return CMD_CAM_BOOT_ERROR;
 	}
 
+	/* Capture burst */
+	ret = CaptureBurst(buffer_number, filter_flag, tries, black_fraction, opcode);
+	(cam_number == 0) ? DeactivateCAMA() : DeactivateCAMB();
+
+	if (ret != HAL_OK) {
+		CMD_PopulateEcho(opcode);
+		return CMD_CAM_DCMI_ERROR;
+	}
+
 	// Does user want automatic compressions?
 	if (board_status.delayed_params.perform_compressions == 1) {
-		compressed_photo_t *compression = COMPRESSED_BUFFER(0);
 		Log("Performing compressions!\r\n");
 		for(uint8_t i = 0; i < board_status.delayed_params.num_photos; i++){		// compresses all photos
 			sprintf(log_buf, "Compression %u: \r\n", i);
 			Log(log_buf);
+
 			ret = CompressRawPhoto(buffer_number+i, board_status.delayed_params.compression_quality);
 			if (ret == 0){		// Compression failed
 				Log("Compression error!\r\n");
@@ -503,53 +336,13 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode)
 			}
 
 			// Saves compression in FRAM and advances status pointer
-			uint32_t jpeg_size = ((uint32_t)compression->size_MSB << 16) | compression->size_LSB;
-			uint32_t header_size = sizeof(compressed_photo_t) - sizeof(compression->data);
-			uint32_t total_size  = header_size + jpeg_size;
-
-			if (board_status.compression_ptr_address + total_size > FIRMWARE_BACKUP_START) {		// Checks if FRAM will overflow allowed space (before FW backup start)
-				Log("FRAM full — cannot save compression.\r\n");
+			CMD_ReturnStatus ret_cmd = SaveCompressionToFRAM();
+			if (ret_cmd != CMD_OK) {
 				CMD_PopulateEcho(opcode);
-				return CMD_FRAM_FULL;
+				return ret_cmd;
 			}
-
-			if (board_status.compression_count >= MAX_COMPRESSED_PHOTOS) {
-				Log("Compression index full.\r\n");
-				CMD_PopulateEcho(opcode);
-				return CMD_INDEX_FULL;
-			}
-
-			uint16_t idx = board_status.compression_count;
-			compression_table[idx].fram_address = board_status.compression_ptr_address;
-			compression_table[idx].total_size   = total_size;
-			compression_table[idx].valid        = 1;
-
-			char log_buf[96];
-			sprintf(log_buf, "Index[%u].fram_address = 0x%06lX\r\n", idx, compression_table[idx].fram_address);
-			Log(log_buf);
-
-			// Save header (everything before data[])
-			SaveBufferFRAM((uint8_t *)compression, header_size, board_status.compression_ptr_address);
-			board_status.compression_ptr_address += header_size;
-
-			// Save JPEG data
-			SaveBufferFRAM(compression->data, jpeg_size, board_status.compression_ptr_address);
-			board_status.compression_ptr_address += jpeg_size;
-
-			if (board_status.compression_ptr_address <= FIRMWARE_BACKUP_START) {
-				board_status.fram_bytes_left = FIRMWARE_BACKUP_START - board_status.compression_ptr_address;
-			} else {
-				board_status.fram_bytes_left = 0;   // shouldn't happen, but avoids unsigned underflow if it does
-				Log("WARNING: compression_ptr_address exceeds FIRMWARE_BACKUP_START!\r\n");
-			}
-
-			// Increment number of compressions in memory by one
-			board_status.compression_count++;		// compressions in memory currently
-			board_status.compressions_done++;		// total compressions done
-			board_status.compression_buffer_occupied = 1;
 		}
 	}
-
 
 	CMD_PopulateEcho(opcode);
 	return CMD_OK;
@@ -733,51 +526,11 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode)
 	}
 
 	// Saves compression in FRAM and advances status pointer
-	compressed_photo_t *compression = COMPRESSED_BUFFER(0);
-	uint32_t jpeg_size = ((uint32_t)compression->size_MSB << 16) | compression->size_LSB;
-	uint32_t header_size = sizeof(compressed_photo_t) - sizeof(compression->data);
-	uint32_t total_size  = header_size + jpeg_size;
-
-	if (board_status.compression_ptr_address + total_size > FIRMWARE_BACKUP_START) {		// Checks if FRAM will overflow allowed space (before FW backup start)
-		Log("FRAM full — cannot save compression.\r\n");
+	CMD_ReturnStatus ret_cmd = SaveCompressionToFRAM();
+	if (ret_cmd != CMD_OK) {
 		CMD_PopulateEcho(opcode);
-		return CMD_FRAM_FULL;
+		return ret_cmd;
 	}
-
-	if (board_status.compression_count >= MAX_COMPRESSED_PHOTOS) {
-		Log("Compression index full.\r\n");
-		CMD_PopulateEcho(opcode);
-		return CMD_INDEX_FULL;
-	}
-
-	uint16_t idx = board_status.compression_count;
-	compression_table[idx].fram_address = board_status.compression_ptr_address;
-	compression_table[idx].total_size   = total_size;
-	compression_table[idx].valid        = 1;
-
-	char log_buf[96];
-	sprintf(log_buf, "Index[%u].fram_address = 0x%06lX\r\n", idx, compression_table[idx].fram_address);
-	Log(log_buf);
-
-	// Save header (everything before data[])
-	SaveBufferFRAM((uint8_t *)compression, header_size, board_status.compression_ptr_address);
-	board_status.compression_ptr_address += header_size;
-
-	// Save JPEG data
-	SaveBufferFRAM(compression->data, jpeg_size, board_status.compression_ptr_address);
-	board_status.compression_ptr_address += jpeg_size;
-
-	if (board_status.compression_ptr_address <= FIRMWARE_BACKUP_START) {
-		board_status.fram_bytes_left = FIRMWARE_BACKUP_START - board_status.compression_ptr_address;
-	} else {
-		board_status.fram_bytes_left = 0;   // shouldn't happen, but avoids unsigned underflow if it does
-		Log("WARNING: compression_ptr_address exceeds FIRMWARE_BACKUP_START!\r\n");
-	}
-
-	// Increment number of compressions in memory by one
-	board_status.compression_count++;		// compressions in memory currently
-	board_status.compressions_done++;		// total compressions done
-	board_status.compression_buffer_occupied = 1;
 
 	CMD_PopulateEcho(opcode);
 	return CMD_OK;
@@ -806,11 +559,19 @@ CMD_ReturnStatus CMD_EraseFRAM(uint8_t *opcode)
  */
 CMD_ReturnStatus CMD_ForceReset(uint8_t *opcode)
 {
+	if (!BoardStatusIntact()) {		// Protects against corruption between last main loop CRC and this moment
+		Log("RAM corrupt - restoring from FRAM\r\n");
+		LoadBoardStatusFRAM();
+		board_status.ram_corruption_recovery++;
+	}
+
     Log("Forced reset requested. Resetting...\r\n");
     board_status.requested_power_downs++;		// Increase by one the number of requested power downs
 
-    // Save board status before reset...
-    SaveBufferFRAM((uint8_t *)&board_status, sizeof(board_status), BOARD_STATUS_START);
+    /* Re-commit after modifying requested_power_downs so the
+     * shadow CRC reflects the updated value before saving */
+    CommitBoardStatus();
+    SaveBoardStatusFRAM();
 
     tx_buffer[1] = COMMAND_SUCCESS;		// Force to send a successful message to GS before reset
 	CMD_PopulateEcho(opcode);			// populates received instr + opcode before transmission
@@ -895,7 +656,9 @@ CMD_ReturnStatus CMD_SendCompFrame(uint8_t *opcode)
 		return CMD_BUFFER_INVALID;
 	}
 
-	uint32_t header_size = sizeof(compressed_photo_t) - (2*L*H);  // size of compressed photo header
+	compressed_photo_t *compression;		// Just to get length of data member
+
+	uint32_t header_size = sizeof(compressed_photo_t) - sizeof(compression->data);  // size of compressed photo header
 	uint32_t total_size  = compression_table[index].total_size;
 	uint32_t jpeg_size   = total_size - header_size;
 	uint32_t jpeg_start  = compression_table[index].fram_address + header_size;

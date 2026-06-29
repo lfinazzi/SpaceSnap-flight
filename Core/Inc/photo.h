@@ -546,5 +546,30 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
                                         uint8_t   tries,
                                         uint8_t   black_fraction);
 
+/********************************************************************************
+ * @brief  Captures a burst of raw photos into consecutive SRAM buffers
+ *         using the already-initialised camera.
+ *
+ * @note   Takes num_photos frames starting at buffer_number, waiting
+ *         time_between_photos seconds between each (except after the
+ *         last). IWDG is refreshed during inter-photo waits via
+ *         delay_kick_wdg(). Updates board_status.photos_taken and
+ *         raw_buffer_occupied[] on each successful capture.
+ *
+ * @param  cam_addr           I2C address of the active camera.
+ * @param  buffer_number      First SRAM buffer slot to write into.
+ * @param  filter_flag        Non-zero to enable black pixel filtering.
+ * @param  tries              Retake count if filter enabled.
+ * @param  black_fraction     Black pixel threshold if filter enabled.
+ * @param  opcode             Original command opcode (stored in header).
+ *
+ * @retval HAL_StatusTypeDef  HAL_OK if all frames captured successfully,
+ *                            HAL_ERROR on any capture failure.
+ ********************************************************************************/
+HAL_StatusTypeDef CaptureBurst(uint8_t buffer_number,
+                                       uint8_t filter_flag,
+                                       uint8_t tries,
+                                       uint8_t black_fraction,
+                                       uint8_t *opcode);
 
 #endif	/* __PHOTO_H__ */

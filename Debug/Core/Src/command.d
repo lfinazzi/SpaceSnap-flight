@@ -37,7 +37,8 @@ Core/Src/command.o: ../Core/Src/command.c ../Core/Inc/command.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h \
  ../Core/Inc/sram.h ../Core/Inc/fram.h ../Core/Inc/status.h \
  ../Core/Inc/sram.h ../Core/Inc/photo.h ../Core/Inc/comms.h \
- ../Core/Inc/main.h ../Core/Inc/fw_version.h
+ ../Core/Inc/main.h ../Core/Inc/fw_version.h ../Core/Inc/protection.h \
+ ../Core/Inc/main.h
 ../Core/Inc/command.h:
 ../Core/Inc/status.h:
 ../Core/Inc/command.h:
@@ -86,3 +87,5 @@ Core/Src/command.o: ../Core/Src/command.c ../Core/Inc/command.h \
 ../Core/Inc/comms.h:
 ../Core/Inc/main.h:
 ../Core/Inc/fw_version.h:
+../Core/Inc/protection.h:
+../Core/Inc/main.h:

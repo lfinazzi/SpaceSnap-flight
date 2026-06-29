@@ -27,7 +27,9 @@
 extern uint8_t state_shadow_b;
 extern uint8_t state_shadow_c;
 
-
+/* In status.h - important crc shadows, NOT in board_status_t. Check integrity of program memory */
+extern uint32_t shadow_board_status_crc;		// Integrity of board_status
+extern uint32_t shadow_compression_table_crc;	// Integrity of compression_table
 
 typedef struct __attribute__((packed)) {
     uint32_t fw_backup_size;   		// Size in bytes of main application backup in FRAM
@@ -70,7 +72,9 @@ typedef struct {
     uint8_t fram_ok;					 			// FRAM init ok
     uint8_t sram_ok;					 			// SRAM init ok
 
+    // NON-VOLATILE
     uint8_t state_vote_fail_count;					// Increments by one on app_state majority vote count
+    uint16_t ram_corruption_recovery;				// Times board_status in program memory was recovered from FRAM
 
     // Last command - NON-VOLATILE
     uint8_t  last_instruction;           			// last instruction number received
@@ -105,14 +109,13 @@ typedef struct {
     uint8_t delayed_intervals;						// Minutes after start to execute photo capture (mins)
     uint8_t delayed_flag;							// Indicates if instruction was not requested in this boot session
 
-
     // State tracking
     app_state_t state;								// Tracks actual board state, system can recover in STATE_SCHEDULED in case of power off
 
 } board_status_t;
 
 typedef char board_status_t_size[	// Static assert to be sure to erase FRAM after changing board_status_t struct
-    (sizeof(board_status_t) == 100) ? 1 : -1
+    (sizeof(board_status_t) == 104) ? 1 : -1
 ];
 
 
@@ -169,6 +172,70 @@ void LogBoardStatus(void);
  *         (VDD and MCU temperature fields use %.3f and %.1f respectively).
  ********************************************************************************/
 void LogBoardStatusFull(void);
+
+
+/********************************************************************************
+ * @brief  Updates the RAM shadow CRC of board_status to reflect its
+ *         current contents.
+ *
+ * @note   Must be called after every intentional modification of
+ *         board_status so the shadow stays in sync. Call sites:
+ *         end of ExecuteCommand(), end of UpdateStatus() in the main
+ *         loop, and end of LoadBoardStatusFRAM() after a successful
+ *         load. Failure to call this after a legitimate modification
+ *         will cause BoardStatusIntact() to falsely detect corruption
+ *         on the next check.
+ *
+ * @retval None
+ ********************************************************************************/
+void CommitBoardStatus(void);
+
+
+/********************************************************************************
+ * @brief  Updates the RAM shadow CRC of compression_table to reflect
+ *         its current contents.
+ *
+ * @note   Must be called after every intentional modification of
+ *         compression_table. Call sites: end of SaveCompressionToFRAM()
+ *         and end of EraseCompressions(). Failure to call this after a
+ *         legitimate modification will cause CompTableIntact() to
+ *         falsely detect corruption on the next check.
+ *
+ * @retval None
+ ********************************************************************************/
+void CommitCompressionTable(void);
+
+
+/********************************************************************************
+ * @brief  Checks whether board_status in RAM matches its shadow CRC,
+ *         indicating no unintended modification since the last
+ *         CommitBoardStatus() call.
+ *
+ * @note   Recomputes CRC32 over the live board_status struct and
+ *         compares against shadow_board_status_crc. A mismatch
+ *         indicates either an SRAM SEU or a code path that modified
+ *         board_status without calling CommitBoardStatus(). Called
+ *         at the top of SaveBoardStatusFRAM() before every FRAM write
+ *         to prevent persisting corrupt data.
+ *
+ * @retval uint8_t   1 if intact, 0 if CRC mismatch detected.
+ ********************************************************************************/
+uint8_t BoardStatusIntact(void);
+
+
+/********************************************************************************
+ * @brief  Checks whether compression_table in RAM matches its shadow
+ *         CRC, indicating no unintended modification since the last
+ *         CommitCompressionTable() call.
+ *
+ * @note   Recomputes CRC32 over the live compression_table and compares
+ *         against shadow_compression_table_crc. Called before writing
+ *         the compression table to FRAM to prevent persisting corrupt
+ *         index data.
+ *
+ * @retval uint8_t   1 if intact, 0 if CRC mismatch detected.
+ ********************************************************************************/
+uint8_t CompTableIntact(void);
 
 
 #endif	/* __STATUS_H__ */

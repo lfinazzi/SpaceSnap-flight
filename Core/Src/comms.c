@@ -264,6 +264,9 @@ void LogRawHeaderDebug(uint8_t slot, volatile raw_photo_t *raw_buffer, uint32_t 
 	sprintf(log_buf, "black_pixels: %lu\r\n", black_pixels);
 	Log(log_buf);
 
+	sprintf(log_buf, "Header CRC: 0x%08lX\r\n", raw_buffer->header_crc);
+	Log(log_buf);
+
 	sprintf(log_buf, "header_size: %lu bytes\r\n", header_size);
 	Log(log_buf);
 
@@ -323,6 +326,9 @@ void LogCompHeaderDebug(uint8_t index, uint32_t fram_address, uint32_t header_si
 	Log(log_buf);
 
 	sprintf(log_buf, "fram_address: 0x%06lX\r\n", fram_address);
+	Log(log_buf);
+
+	sprintf(log_buf, "Header CRC: 0x%08lX\r\n", hdr->header_crc);
 	Log(log_buf);
 
 	sprintf(log_buf, "header_size: %lu bytes\r\n", header_size);

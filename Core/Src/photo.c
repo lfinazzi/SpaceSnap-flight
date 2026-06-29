@@ -12,6 +12,7 @@
 #include "status.h"
 #include "sram.h"
 #include "main.h"
+#include "protection.h"
 
 #include <stdio.h>
 
@@ -1149,6 +1150,9 @@ HAL_StatusTypeDef Photo_CaptureRaw(uint8_t  slot,
 	buf->black_pixels_LSB = 0;
 	buf->black_pixels_MSB = 0;
 
+    /* Compute CRC32 over header fields only - data[] is too large to CRC here */
+    buf->header_crc = CalculateCRC32((const uint8_t *)buf, RAW_PHOTO_HEADER_SIZE);
+
     Log("DCMI: frame captured OK\r\n");
     return HAL_OK;
 }
@@ -1210,6 +1214,9 @@ uint8_t CompressRawPhoto(uint8_t buffer, int quality)
 	// Record number of black pixels from raw. Unused (0x00000000) if no black filtering was performed
 	compression->black_pixels_LSB = raw->black_pixels_LSB;
 	compression->black_pixels_MSB = raw->black_pixels_MSB;
+
+	// Calculate CRC32 header before saving to FRAM
+	compression->header_crc = CalculateCRC32((const uint8_t *)compression, COMP_PHOTO_HEADER_SIZE);
 
 	if (ret == 0){
 		Log("Compression failed!\r\n");
@@ -1283,7 +1290,6 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
         buf->black_pixels_MSB = (uint16_t)((black_pixels >> 16) & 0xFFFF);
         buf->black_pixels_LSB = (uint16_t)( black_pixels        & 0xFFFF);
 
-
         // There are less black pixels than the maximum allowed
         if ((black_pixels * 200u) <= (total_pixels * (uint32_t)black_fraction)) {		// Each count in black_fraction represents 0.5% of image
             Log("Frame passed black filter\r\n");
@@ -1301,4 +1307,39 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
     }
 
     return HAL_OK;  // unreachable, satisfies compiler
+}
+
+HAL_StatusTypeDef CaptureBurst(uint8_t buffer_number,
+                                       uint8_t filter_flag,
+                                       uint8_t tries,
+                                       uint8_t black_fraction,
+                                       uint8_t *opcode)
+{
+    for (uint8_t i = 0; i < board_status.delayed_params.num_photos; i++) {
+
+        HAL_StatusTypeDef ret;
+        if (filter_flag)
+            ret = Photo_CaptureRawBlack(buffer_number + i,
+                                         board_status.photos_taken,
+                                         opcode, tries, black_fraction);
+        else
+            ret = Photo_CaptureRaw(buffer_number + i,
+                                    board_status.photos_taken, opcode);
+
+        if (ret != HAL_OK) {
+            Log("Photo capture FAILED\r\n");
+            return HAL_ERROR;
+        }
+
+        if (i < board_status.delayed_params.num_photos - 1) {
+            Log("Waiting...\r\n");
+            delay_kick_wdg(board_status.delayed_params.time_between_photos);
+        } else {
+            Log("Burst finished\r\n");
+        }
+
+        board_status.photos_taken++;
+        board_status.raw_buffer_occupied[buffer_number + i] = 1;
+    }
+    return HAL_OK;
 }

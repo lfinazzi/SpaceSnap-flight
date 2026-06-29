@@ -155,7 +155,7 @@ int main(void)
   TestSRAM();
 
   // Prints Status with Log()
-  LogBoardStatus();																	// Logs current status to UART4 (debug)
+  LogBoardStatus();					// Logs current status to UART4 (debug)
 
   /* USER CODE END 2 */
 
@@ -165,6 +165,9 @@ int main(void)
   while (1)
   {
 	  HAL_IWDG_Refresh(&hiwdg); 													// Kick the IWDG once per loop
+	  UpdateStatus();
+	  CommitBoardStatus();			// Calculates the CRC of board_status in program memory, protects before status is saved
+
 	  switch (GetState()) {
 		  case STATE_IDLE:
 			  if(rx_flag){
@@ -197,6 +200,7 @@ int main(void)
 		  case STATE_EXECUTE_COMMAND:
 			  current_command_pointer = GetCommand(instr_number);					// Identifies command to execute
 			  cmd_ret = ExecuteCommand(current_command_pointer, instr_opcode);		// Executes command with opcode
+
 			  if (cmd_ret == CMD_SCHEDULED)
 				  SetState(STATE_DELAYED_PICTURE);
 			  else
@@ -250,8 +254,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	UpdateStatus();
-	SaveBoardStatusFRAM();
+
+    SaveBoardStatusFRAM();
+    CommitCompressionTable();    /* seal AFTER save, protects until next loop's save */
   }
   /* USER CODE END 3 */
 }

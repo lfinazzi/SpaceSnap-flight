@@ -11,6 +11,7 @@
 #include "comms.h"
 #include "telemetry.h"
 #include "main.h"
+#include "protection.h"
 
 #include <stdio.h>
 
@@ -23,7 +24,8 @@ fw_backup_info_t fw_backup_info;		// unmodified on init on purpose, nothing can 
 uint8_t state_shadow_b = 0;
 uint8_t state_shadow_c = 0;
 
-
+uint32_t shadow_board_status_crc = 0;
+uint32_t shadow_compression_table_crc = 0;
 
 void UpdateStatus(void)
 {
@@ -189,11 +191,40 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "Compression quality: %u\r\n", board_status.delayed_params.compression_quality);
 	Log(log_buf);
 
+	// Ram recovery flag
+	sprintf(log_buf, "Memory recoveries from FRAM: %u.\r\n", board_status.ram_corruption_recovery);
+	Log(log_buf);
+
 
 	sprintf(log_buf, "AirMac frame budget: %u/%u\r\n", sizeof(board_status_t) + sizeof(fw_backup_info_t) + DATA_HEADER_SIZE, AIRMAC_SIZE);
 	Log(log_buf);
 
 	return;
+}
+
+void CommitBoardStatus(void)
+{
+    shadow_board_status_crc = BoardStatusCRC();
+}
+
+void CommitCompressionTable(void)
+{
+    shadow_compression_table_crc = CalculateCRC32(
+        (const uint8_t *)compression_table,
+        sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS);
+}
+
+uint8_t BoardStatusIntact(void)
+{
+	return BoardStatusCRC() == shadow_board_status_crc;
+}
+
+uint8_t CompTableIntact(void)
+{
+    return CalculateCRC32(
+        (const uint8_t *)compression_table,
+        sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS)
+        == shadow_compression_table_crc;
 }
 
 

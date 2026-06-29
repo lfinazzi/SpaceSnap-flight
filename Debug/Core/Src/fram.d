@@ -36,7 +36,7 @@ Core/Src/fram.o: ../Core/Src/fram.c ../Core/Inc/fram.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_tim_ex.h \
  ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal_uart.h \
  ../Core/Inc/sram.h ../Core/Inc/status.h ../Core/Inc/main.h \
- ../Core/Inc/protection.h
+ ../Core/Inc/protection.h ../Core/Inc/main.h
 ../Core/Inc/fram.h:
 ../Core/Inc/status.h:
 ../Core/Inc/command.h:
@@ -81,3 +81,4 @@ Core/Src/fram.o: ../Core/Src/fram.c ../Core/Inc/fram.h \
 ../Core/Inc/status.h:
 ../Core/Inc/main.h:
 ../Core/Inc/protection.h:
+../Core/Inc/main.h:

@@ -1,2 +1,8 @@
 ../Core/Src/protection.c:4:6:SetState	16	static
 ../Core/Src/protection.c:11:9:GetState	16	static
+../Core/Src/protection.c:29:10:CalculateCRC32	16	static
+../Core/Src/protection.c:34:10:BoardStatusCRC	16	static
+../Core/Src/protection.c:56:10:CRC32_Update	32	static
+../Core/Src/protection.c:69:6:DEBUG_CorruptBoardStatus	8	static
+../Core/Src/protection.c:76:6:DEBUG_CorruptCompressionTable	8	static
+../Core/Src/protection.c:83:6:DEBUG_CorruptFRAMStatus	16	static

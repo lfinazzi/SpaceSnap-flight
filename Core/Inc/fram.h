@@ -15,9 +15,13 @@
 
 #define BOARD_STATUS_START 				(0x000000)													// Address to save board status
 
-#define COMPRESSION_TABLE_START 		((BOARD_STATUS_START) + (sizeof(board_status_t)))			// compressed space starts after status information, which starts at 0x00000000
+#define BOARD_STATUS_CRC    			((BOARD_STATUS_START) + (sizeof(board_status_t)))
 
-#define PHOTO_DATA_START				((COMPRESSION_TABLE_START) + ((sizeof(compression_index_entry_t))*(MAX_COMPRESSED_PHOTOS)))		// Space for compressions
+#define COMPRESSION_TABLE_START 		((BOARD_STATUS_CRC) + (sizeof(uint32_t)))	// compressed space starts after status information, which starts at 0x00000000
+
+#define COMPRESSION_TABLE_CRC 			((COMPRESSION_TABLE_START) + ((sizeof(compression_index_entry_t))*(MAX_COMPRESSED_PHOTOS)))
+
+#define PHOTO_DATA_START				((COMPRESSION_TABLE_CRC) + (sizeof(uint32_t)))				// Space for compressions
 
 #define FIRMWARE_BACKUP_SIZE			(0x40000)		// 256 kB for FW backup image
 #define FIRMWARE_IMAGE_SIZE				((FIRMWARE_BACKUP_SIZE) - sizeof(fw_backup_info_t))			// ~256 kB for FW backup image
@@ -30,6 +34,11 @@
 #define FRAM_CMD_WREN   				(0x06U)  	// Write Enable
 #define FRAM_CMD_WRITE  				(0x02U)  	// Write Memory
 #define FRAM_CMD_READ   				(0x03U)  	// Read Memory
+
+
+typedef char photo_data_start_check[
+    (PHOTO_DATA_START < FIRMWARE_BACKUP_START) ? 1 : -1
+];
 
 
 /********************************************************************************
@@ -224,5 +233,25 @@ void EraseCompressions(void);
  ********************************************************************************/
 void SaveFRAM_Unlocked(uint8_t *buffer, uint32_t size, uint32_t fram_address);
 
+
+/********************************************************************************
+ * @brief  Saves the current SRAM compressed buffer to FRAM, updates the
+ *         compression index table, and advances board_status pointers.
+ *
+ * @note   Saves the header (all fields before data[]) and JPEG data
+ *         separately to the FRAM photo archive region. Updates
+ *         compression_table[compression_count] with the new entry's
+ *         address, total size, and valid flag, then increments
+ *         compression_count, compressions_done, and updates
+ *         fram_bytes_left. Must only be called after a successful
+ *         CompressRawPhoto() — assumes COMPRESSED_BUFFER(0) holds a
+ *         valid compression ready to persist.
+ *
+ * @retval CMD_ReturnStatus   CMD_OK on success. CMD_FRAM_FULL if the
+ *                            archive region has insufficient space.
+ *                            CMD_INDEX_FULL if the entry index is
+ *                            exhausted.
+ ********************************************************************************/
+CMD_ReturnStatus SaveCompressionToFRAM(void);
 
 #endif	/* __FRAM_H__ */

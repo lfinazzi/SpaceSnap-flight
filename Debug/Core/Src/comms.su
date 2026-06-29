@@ -11,6 +11,6 @@
 ../Core/Src/comms.c:179:5:PollUSSReset	16	static
 ../Core/Src/comms.c:190:6:LogRawFrameDebug	144	static
 ../Core/Src/comms.c:240:6:LogRawHeaderDebug	152	static
-../Core/Src/comms.c:288:6:LogCompHeaderDebug	144	static
-../Core/Src/comms.c:334:6:LogCompFrameDebug	144	static
-../Core/Src/comms.c:394:6:CMD_PopulateEcho	16	static
+../Core/Src/comms.c:291:6:LogCompHeaderDebug	144	static
+../Core/Src/comms.c:340:6:LogCompFrameDebug	144	static
+../Core/Src/comms.c:400:6:CMD_PopulateEcho	16	static
