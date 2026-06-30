@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file           : telemetry.h
-  * @brief          : Telemetry interface — response frame encoding declarations
+  * @brief          : Telemetry interface — reset cause detection and MCU sensor readings
   ******************************************************************************
   * @author         : Lucas Finazzi <lfinazzi@unsam.edu.ar> (2026)
   *

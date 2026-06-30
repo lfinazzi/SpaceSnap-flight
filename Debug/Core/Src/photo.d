@@ -38,7 +38,7 @@ Core/Src/photo.o: ../Core/Src/photo.c ../Core/Inc/photo.h \
  ../Core/Inc/comms.h ../Core/Inc/photo.h ../Core/Inc/status.h \
  ../Core/Inc/comms.h ../Core/Inc/sram.h ../Core/Inc/sram.h \
  ../Core/Inc/main.h ../Core/Inc/protection.h ../Core/Inc/status.h \
- ../Core/Inc/main.h ../Core/Inc/tiny_jpeg.h
+ ../Core/Inc/main.h ../Core/Inc/fw_version.h ../Core/Inc/tiny_jpeg.h
 ../Core/Inc/photo.h:
 ../Core/Inc/command.h:
 ../Drivers/STM32F2xx_HAL_Driver/Inc/stm32f2xx_hal.h:
@@ -86,4 +86,5 @@ Core/Src/photo.o: ../Core/Src/photo.c ../Core/Inc/photo.h \
 ../Core/Inc/protection.h:
 ../Core/Inc/status.h:
 ../Core/Inc/main.h:
+../Core/Inc/fw_version.h:
 ../Core/Inc/tiny_jpeg.h:

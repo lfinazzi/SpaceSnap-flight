@@ -102,13 +102,16 @@ void DumpCompressedBuffer(uint8_t slot, uint32_t num_bytes);
 /********************************************************************************
  * @brief  Resets all volatile fields in board_status to their default values.
  *
- * @note   Clears all raw buffer and compression buffer occupancy flags,
- *         resets uptime_session to 0, and clears last_instruction,
- *         last_cmd_status, and last_opcode[]. Should be called once on every
- *         boot before any command processing begins, since these fields are
- *         not meaningful across resets (SRAM does not persist across power
- *         cycles) and may contain stale values loaded from FRAM via
+ * @note   Clears all raw buffer and compression buffer occupancy flags, and
+ *         resets uptime_session to 0. Should be called once on every boot
+ *         before any command processing begins, since these fields are not
+ *         meaningful across resets (SRAM does not persist across power cycles)
+ *         and may contain stale values loaded from FRAM via
  *         LoadBoardStatusFRAM().
+ *
+ *         Note: last_instruction, last_cmd_status, and last_opcode[] are
+ *         intentionally NOT cleared, so the last command from the previous
+ *         boot session remains visible in board_status after a reset.
  ********************************************************************************/
 void ResetVolatileStatus(void);
 

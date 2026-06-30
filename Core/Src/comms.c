@@ -42,12 +42,22 @@ void Log(char *message)
 
 void PrintBanner(void)
 {
-	// TODO: Cool banner
-    const char *banner =
-        "SpaceSnap\r\n"
-    ;
+	char info[256];
 
-    HAL_UART_Transmit(&huart4, (uint8_t *)banner, strlen(banner), HAL_MAX_DELAY);
+	uint16_t major = VERSION_MAJOR;
+	uint16_t minor = VERSION_MINOR;
+
+	int pos = sprintf(info,
+		"\r\n"
+		"==================================================\r\n"
+		"  UNSAM SpaceSnap (USS)\r\n"
+		"  Firmware version: %u.%u\r\n"
+		"  Author: Lucas Finazzi <lfinazzi@unsam.edu.ar>\r\n"
+		"  Build date: %s %s\r\n"
+		"==================================================\r\n",
+		major, minor, __DATE__, __TIME__);
+
+	HAL_UART_Transmit(&huart4, (uint8_t *)info, pos, HAL_MAX_DELAY);
 }
 
 void ClearTxBuffer(void)

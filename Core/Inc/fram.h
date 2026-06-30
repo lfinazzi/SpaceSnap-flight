@@ -23,50 +23,36 @@
 
 #define PHOTO_DATA_START				((COMPRESSION_TABLE_CRC) + (sizeof(uint32_t)))				// Space for compressions
 
-#define FIRMWARE_BACKUP_SIZE			(0x40000)		// 256 kB for FW backup image
-#define FIRMWARE_IMAGE_SIZE				((FIRMWARE_BACKUP_SIZE) - sizeof(fw_backup_info_t))			// ~256 kB for FW backup image
+#define FIRMWARE_BACKUP_SIZE			(0x40000UL)		// 256 kB for FW backup image
+#define FIRMWARE_COPY_SIZE           	(FIRMWARE_BACKUP_SIZE / 2)   /* 128 KB per copy */
 
 #define END_OF_FRAM						(0x200000)		// 2 MB
-
 #define FIRMWARE_BACKUP_START 			((END_OF_FRAM) - (FIRMWARE_BACKUP_SIZE))
-#define FIRMWARE_IMAGE_START            ((FIRMWARE_BACKUP_START) + (sizeof(fw_backup_info_t)))
 
+// Two firmware copies are saved in FRAM for extra safety
+
+// Copy A
+#define FIRMWARE_BACKUP_A_START      (FIRMWARE_BACKUP_START)
+#define FIRMWARE_IMAGE_A_START       (FIRMWARE_BACKUP_A_START + sizeof(fw_backup_info_t))
+#define FIRMWARE_IMAGE_A_SIZE        (FIRMWARE_COPY_SIZE - sizeof(fw_backup_info_t))
+
+// Copy B
+#define FIRMWARE_BACKUP_B_START      (FIRMWARE_BACKUP_A_START + FIRMWARE_COPY_SIZE)
+#define FIRMWARE_IMAGE_B_START       (FIRMWARE_BACKUP_B_START + sizeof(fw_backup_info_t))
+#define FIRMWARE_IMAGE_B_SIZE        (FIRMWARE_COPY_SIZE - sizeof(fw_backup_info_t))
+
+// FRAM control Macros
 #define FRAM_CMD_WREN   				(0x06U)  	// Write Enable
 #define FRAM_CMD_WRITE  				(0x02U)  	// Write Memory
 #define FRAM_CMD_READ   				(0x03U)  	// Read Memory
+
+// FRAM write Macros
+#define FRAM_WRITE_RETRY				(3U)		// Tries to retry on FRAM write failure before fram_ok = 0
 
 
 typedef char photo_data_start_check[
     (PHOTO_DATA_START < FIRMWARE_BACKUP_START) ? 1 : -1
 ];
-
-
-/********************************************************************************
- * @brief  Writes a single byte to the FRAM at the specified address.
- *
- * @note   Issues a Write Enable (WREN) command before the write operation,
- *         as required by the CY15B108QSN protocol. The address is 24-bit,
- *         transmitted MSB first. CS is asserted and deasserted around each
- *         SPI transaction.
- *
- * @param  addr   24-bit memory address to write to.
- * @param  data   Byte value to write.
- ********************************************************************************/
-void FRAM_WriteByte(uint32_t addr, uint8_t data);
-
-
-/********************************************************************************
- * @brief  Reads a single byte from the FRAM at the specified address.
- *
- * @note   Transmits the READ opcode followed by the 24-bit address MSB first,
- *         then clocks in one byte of data. CS is asserted for the full
- *         transaction and deasserted on completion.
- *
- * @param  addr   24-bit memory address to read from.
- *
- * @retval uint8_t   Byte value read from the specified address.
- ********************************************************************************/
-uint8_t FRAM_ReadByte(uint32_t addr);
 
 
 /********************************************************************************
@@ -104,45 +90,62 @@ uint8_t TestFRAM(void);
 /********************************************************************************
  * @brief  Saves board_status and compression_table to FRAM.
  *
- * @note   Serializes the entire board_status_t struct into FRAM starting at
- *         BOARD_STATUS_START, then serializes the compression table
- *         (MAX_COMPRESSED_PHOTOS entries of compression_index_entry_t) starting
- *         at COMPRESSION_TABLE_START, writing one byte at a time via
- *         FRAM_WriteByte(). Assumes both global variables are up to date
- *         before calling.
+ * @note   Checks BoardStatusIntact() and CompTableIntact() first; if either
+ *         RAM shadow CRC fails, calls RecoverBoardStatusFromFRAM() and
+ *         returns without writing to prevent persisting corrupt data.
+ *
+ *         If RAM is intact, serializes board_status_t and then the
+ *         compression table using SaveBufferFRAM() (burst SPI writes).
+ *         Each region is followed by its CRC32, which is read back
+ *         immediately to verify the write. On verify failure the write is
+ *         retried up to FRAM_WRITE_RETRY times; if all retries fail,
+ *         board_status.fram_ok is set to 0. On success (possibly after
+ *         a retry), board_status.fram_corruption_write_recovery is
+ *         incremented if a retry was needed.
  ********************************************************************************/
 void SaveBoardStatusFRAM(void);
 
 
 /********************************************************************************
- * @brief  Loads board_status and compression_table from FRAM on bootup.
+ * @brief  Loads board_status and compression_table from FRAM on boot.
  *
- * @note   Calls TestFRAM() first. On success, reads sizeof(board_status_t)
- *         bytes from BOARD_STATUS_START into board_status,
- *         MAX_COMPRESSED_PHOTOS * sizeof(compression_index_entry_t) bytes
- *         from COMPRESSION_TABLE_START into compression_table (one byte at
- *         a time via FRAM_ReadByte()), and fw_backup_size + fw_backup_crc32
- *         from FIRMWARE_BACKUP_START into fw_backup_info via
- *         ReadBufferFRAM(). Sets board_status.fram_ok accordingly.
+ * @note   Called once at startup. Validates FRAM hardware via TestFRAM(),
+ *         then loads and CRC-verifies both regions independently. On a
+ *         CRC failure, resets the affected region to safe defaults and
+ *         increments fram_corruption_defaulted. Always increments boot_count,
+ *         restores state (filtered to only preserve STATE_DELAYED_PICTURE
+ *         across the load), and commits both shadow CRCs.
  *
- *         On TestFRAM() failure, board_status is not loaded from FRAM but
- *         execution continues with the default zero-initialized state.
- *
- *         boot_count is incremented and SaveBoardStatusFRAM() is called
- *         unconditionally after the load attempt, regardless of whether
- *         TestFRAM() passed or failed.
+ * @retval None
  ********************************************************************************/
 void LoadBoardStatusFRAM(void);
 
 
 /********************************************************************************
+ * @brief  Restores board_status and compression_table from FRAM at
+ *         runtime, in response to a detected RAM shadow CRC mismatch.
+ *
+ * @note   Called from SaveBoardStatusFRAM() when BoardStatusIntact() or
+ *         CompTableIntact() fails. Unlike LoadBoardStatusFRAM(), this
+ *         does not run TestFRAM() (FRAM hardware was already confirmed
+ *         working this session) and does not increment boot_count.
+ *         Uses the same state-restore policy as LoadBoardStatusFRAM():
+ *         STATE_DELAYED_PICTURE is preserved; all other states are
+ *         forced to STATE_IDLE. Increments ram_corruption_recovery.
+ *
+ * @retval None
+ ********************************************************************************/
+void RecoverBoardStatusFromFRAM(void);
+
+
+/********************************************************************************
  * @brief  Erases the entire FRAM writable region and resets all system state.
  *
- * @note   Writes 0x00 to every byte from address 0x00 to FIRMWARE_BACKUP_START
- *         via FRAM_WriteByte(). The IWDG is kicked on every byte write to
- *         prevent a watchdog reset during the erase. This operation takes
- *         approximately 40 seconds. Does not touch the firmware backup region
- *         (FIRMWARE_BACKUP_START and above).
+ * @note   Writes 0x00 from address 0x00 to FIRMWARE_BACKUP_START in
+ *         256-byte chunks via SaveBufferFRAM(). The IWDG is kicked once
+ *         per chunk to prevent a watchdog reset during the erase. Does
+ *         not touch the firmware backup region (FIRMWARE_BACKUP_START
+ *         and above).
  *
  *         After erasing, zeroes board_status and compression_table in RAM
  *         via memset(), resets board_status.compression_ptr_address to
@@ -195,10 +198,9 @@ void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address);
  * @brief  Erases the compressed photo region in FRAM and resets compression
  *         tracking state.
  *
- * @note   Writes 0x00 to every byte from PHOTO_DATA_START to
- *         FIRMWARE_BACKUP_START via FRAM_WriteByte(). The IWDG is kicked on
- *         every byte write to prevent a watchdog reset during the erase.
- *         This operation takes approximately 40 seconds.
+ * @note   Writes 0x00 from PHOTO_DATA_START to FIRMWARE_BACKUP_START in
+ *         256-byte chunks via SaveBufferFRAM(). The IWDG is kicked once
+ *         per chunk to prevent a watchdog reset during the erase.
  *
  *         After erasing, resets compression_table[] to zero via memset(),
  *         resets board_status.compression_ptr_address to PHOTO_DATA_START,
@@ -253,5 +255,36 @@ void SaveFRAM_Unlocked(uint8_t *buffer, uint32_t size, uint32_t fram_address);
  *                            exhausted.
  ********************************************************************************/
 CMD_ReturnStatus SaveCompressionToFRAM(void);
+
+
+/********************************************************************************
+ * @brief  Writes the application flash image to a single FRAM backup copy
+ *         and verifies it by reading back and recomputing the CRC.
+ *
+ * @param  app_start    Source flash address.
+ * @param  app_size     Number of bytes to copy.
+ * @param  dst          Destination FRAM address for this copy's image data.
+ * @param  out_crc      Output: computed CRC32 of the written image.
+ *
+ * @retval CMD_ReturnStatus  CMD_OK on success, CMD_ERROR on readback mismatch.
+ ********************************************************************************/
+CMD_ReturnStatus WriteFirmwareCopy(uint32_t app_start, uint32_t app_size,
+                                   uint32_t dst, uint32_t *out_crc);
+
+
+/********************************************************************************
+ * @brief  Shared implementation: loads and CRC-verifies board_status and
+ *         compression_table from FRAM, applying safe defaults to either
+ *         region independently on a CRC mismatch.
+ *
+ * @note   Internal helper used by both LoadBoardStatusFRAM() (cold boot)
+ *         and RecoverBoardStatusFromFRAM() (runtime RAM-corruption
+ *         recovery). Increments fram_load_failures on either region's
+ *         CRC mismatch, distinct from fram_corruption_recovery which
+ *         tracks write-retry successes in SaveBoardStatusFRAM().
+ *
+ * @retval None
+ ********************************************************************************/
+void RestoreBoardStatusFRAM(void);
 
 #endif	/* __FRAM_H__ */

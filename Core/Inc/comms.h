@@ -67,8 +67,6 @@ void Log(char *message);
 /********************************************************************************
  * @brief  Prints SpaceSnap banner on boot.
  *
- *
- * @note   Uses ascii characters for pretty banner.
  ********************************************************************************/
 void PrintBanner(void);
 

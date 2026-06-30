@@ -499,7 +499,8 @@ uint8_t CompressRawPhoto(uint8_t buffer, int quality);
  *         deep-space black without clipping dark Earth features.
  *
  * @param  buffer           Pointer to UYVY pixel data. Must contain at least
- *                          num_pixels / 2 uint16_t words. num_pixels must be even.
+ *                          num_pixels uint16_t words (num_pixels × 2 bytes).
+ *                          num_pixels must be even.
  * @param  num_pixels       Total number of pixels in the image (width * height).
  * @param  black_threshold  Luma value (0–255) at or below which a pixel is
  *                          considered black.
@@ -513,11 +514,13 @@ uint32_t count_black_pixels_uyvy(volatile uint8_t *buffer, uint32_t  num_pixels,
  * @brief  Captures a raw frame with black-pixel filtering and automatic retry.
  *
  * @note   Wraps Photo_CaptureRaw() with a retry loop that discards frames
- *         where the proportion of black pixels exceeds a computed threshold.
+ *         where the proportion of black pixels exceeds the allowed threshold.
  *         After each capture the luma channel of the UYVY buffer is inspected
- *         via count_black_pixels_uyvy(). If the black fraction exceeds
- *         BLACK_REJECT_FRACTION the frame is discarded and a new capture is
- *         attempted, up to `tries` times total.
+ *         via count_black_pixels_uyvy() using board_status.cam_params.black_threshold
+ *         as the per-pixel darkness threshold. If the black pixel fraction
+ *         exceeds black_fraction (each count = 0.5% of total pixels), the
+ *         frame is discarded and a new capture is attempted, up to `tries`
+ *         times total.
  *
  *         board_status.images_rejected_black is incremented for every
  *         discarded frame. The slot buffer is left containing the last
@@ -556,7 +559,6 @@ HAL_StatusTypeDef Photo_CaptureRawBlack(uint8_t   slot,
  *         delay_kick_wdg(). Updates board_status.photos_taken and
  *         raw_buffer_occupied[] on each successful capture.
  *
- * @param  cam_addr           I2C address of the active camera.
  * @param  buffer_number      First SRAM buffer slot to write into.
  * @param  filter_flag        Non-zero to enable black pixel filtering.
  * @param  tries              Retake count if filter enabled.

@@ -46,7 +46,7 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
-#define DEBUG_FAULT_INJECTION		// TODO: REMOVE FROM FLIGHT BUILD
+#define TELEMETRY_LOOPS_TO_SAVE_TELEMETRY			(500U) // In units of ~2 ms
 
 /* USER CODE END EM */
 

@@ -135,7 +135,9 @@ CMD_ReturnStatus ExecuteCommand(const command_t *command, uint8_t *opcode)
     	memcpy(board_status.last_opcode, opcode, OPCODE_SIZE);						// Logs last command opcode
     }
 
-	CommitBoardStatus();		// Calculates the CRC of board_status fields in program memory, protects between end of CMD execution and end of main program loop
+	CommitBoardStatus();	// Calculates the CRC of board_status fields in program memory, protects between end of CMD execution and end of main program loop
+	SaveBoardStatusFRAM();  // immediate save - command changes never lost
+    Log("Board status saved after command\r\n");
     return st;
 }
 
@@ -768,7 +770,7 @@ CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode)
  */
 CMD_ReturnStatus CMD_EraseCompressions(uint8_t *opcode)
 {
-	static const uint8_t confirm_seq[OPCODE_SIZE] = {0xBA, 0xBF, 0x0A, 0x0F, 0x0A};		// opcode needed to confirm FRAM erase
+	static const uint8_t confirm_seq[OPCODE_SIZE] = {0xBA, 0xBF, 0xBA, 0xBF, 0xBA};		// opcode needed to confirm FRAM erase
 
 	if (memcmp(opcode, confirm_seq, OPCODE_SIZE) != 0) {
 		Log("FRAM erase confirmation mismatch -- aborting.\r\n");
@@ -851,73 +853,48 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 	        app_start, app_end, app_size);
 	Log(log_buf);
 
-	if (app_size == 0 || app_size > FIRMWARE_IMAGE_SIZE) {
+	if (app_size == 0 || app_size > FIRMWARE_IMAGE_A_SIZE) {
 		Log("Firmware backup aborted: app_size out of range for backup region.\r\n");
 		CMD_PopulateEcho(opcode);
 		return CMD_ERROR;
 	}
 
-	uint8_t  chunk[256];
-	uint32_t crc       = 0xFFFFFFFF;
-	uint32_t src        = app_start;
-	uint32_t dst        = FIRMWARE_IMAGE_START;
-	uint32_t remaining  = app_size;
+	uint32_t final_crc;
+	CMD_ReturnStatus ret;
 
-	while (remaining > 0) {
-		uint32_t n = (remaining > sizeof(chunk)) ? sizeof(chunk) : remaining;
-
-		memcpy(chunk, (uint8_t *)src, n);    // flash is memory-mapped, read like any pointer
-		SaveFRAM_Unlocked(chunk, n, dst);
-
-		for (uint32_t i = 0; i < n; i++) {   // CRC32 update, zlib-compatible (matches bootloader)
-			crc ^= chunk[i];
-			for (int b = 0; b < 8; b++)
-				crc = (crc >> 1) ^ (0xEDB88320UL & (-(int32_t)(crc & 1)));
-		}
-
-		src += n; dst += n; remaining -= n;
-		HAL_IWDG_Refresh(&hiwdg);
-	}
-	uint32_t final_crc = ~crc;
-
-
-	// Read back from FRAM and recompute CRC from what's ACTUALLY stored,
-	// to catch real SPI/FRAM write faults rather than trusting the write succeeded.
-	uint32_t verify_crc = 0xFFFFFFFF;
-	uint32_t verify_src  = FIRMWARE_IMAGE_START;
-	remaining = app_size;
-	while (remaining > 0) {
-		uint32_t n = (remaining > sizeof(chunk)) ? sizeof(chunk) : remaining;
-		ReadBufferFRAM(chunk, n, verify_src);
-		for (uint32_t i = 0; i < n; i++) {
-			verify_crc ^= chunk[i];
-			for (int b = 0; b < 8; b++)
-				verify_crc = (verify_crc >> 1) ^ (0xEDB88320UL & (-(int32_t)(verify_crc & 1)));
-		}
-		verify_src += n; remaining -= n;
-		HAL_IWDG_Refresh(&hiwdg);
-	}
-	verify_crc = ~verify_crc;
-
-	if (verify_crc != final_crc) {
-		sprintf(log_buf, "FRAM readback mismatch! wrote=0x%08lX read=0x%08lX\r\n", final_crc, verify_crc);
-		Log(log_buf);
+	/* Write copy A */
+	ret = WriteFirmwareCopy(app_start, app_size, FIRMWARE_IMAGE_A_START, &final_crc);
+	if (ret != CMD_OK) {
+		Log("Firmware copy A write/verify failed\r\n");
 		CMD_PopulateEcho(opcode);
-		return CMD_ERROR;
+		return ret;
 	}
 
-	/* Only write header after image is verified — prevents bootloader
-	 * from seeing a valid header pointing to a corrupt image. */
-	fw_backup_info.fw_backup_size  = app_size;
-	fw_backup_info.fw_backup_crc32 = final_crc;
+	/* Write copy B */
+	uint32_t final_crc_b;
+	ret = WriteFirmwareCopy(app_start, app_size, FIRMWARE_IMAGE_B_START, &final_crc_b);
+	if (ret != CMD_OK) {
+		Log("Firmware copy B write/verify failed\r\n");
+		CMD_PopulateEcho(opcode);
+		return ret;
+	}
+
+	/* Both copies should have identical CRC since they're the same source data */
+	if (final_crc != final_crc_b) {
+		Log("WARNING: copy A and B CRCs differ - should be identical\r\n");
+		board_status.fram_ok = 0;
+	}
+
+	/* Write both headers only after both images verified */
+	fw_backup_info.fw_backup_size    = app_size;
+	fw_backup_info.fw_backup_crc32   = final_crc;
 	fw_backup_info.fw_backup_version = ((uint32_t)VERSION_MAJOR << 16) | (uint32_t)VERSION_MINOR;
 
-	uint8_t *p = (uint8_t *)&fw_backup_info;
-	for (uint8_t i = 0; i < sizeof(fw_backup_info_t); i++) {
-		FRAM_WriteByte(FIRMWARE_BACKUP_START + i, p[i]);
-	}
+	SaveFRAM_Unlocked((uint8_t *)&fw_backup_info, sizeof(fw_backup_info), FIRMWARE_BACKUP_A_START);
+	SaveFRAM_Unlocked((uint8_t *)&fw_backup_info, sizeof(fw_backup_info), FIRMWARE_BACKUP_B_START);
 
-	sprintf(log_buf, "Firmware backup complete: size=%lu crc=0x%08lX, version=%u.%u\r\n", app_size, final_crc, VERSION_MAJOR, VERSION_MINOR);
+	sprintf(log_buf, "Dual backup complete: size=%lu crc=0x%08lX, version=%u.%u\r\n",
+			app_size, final_crc, VERSION_MAJOR, VERSION_MINOR);
 	Log(log_buf);
 
 	CMD_PopulateEcho(opcode);

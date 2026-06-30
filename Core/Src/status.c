@@ -97,6 +97,15 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "sram_ok: %u\r\n", board_status.sram_ok);
 	Log(log_buf);
 
+	sprintf(log_buf, "fram write recoveries: %u\r\n", board_status.fram_corruption_write_recovery);
+	Log(log_buf);
+
+	sprintf(log_buf, "ram recoveries: %u\r\n", board_status.ram_corruption_recovery);
+	Log(log_buf);
+
+	sprintf(log_buf, "fram defaulted after CRC mismatch: %u\r\n", board_status.fram_corruption_defaulted);
+	Log(log_buf);
+
 	// Last command info
 	sprintf(log_buf, "last_instruction: 0x%02X\r\n", board_status.last_instruction);
 	Log(log_buf);
@@ -155,7 +164,8 @@ void LogBoardStatusFull(void)
 	Log(log_buf);
 
 	sprintf(log_buf, "Version of application in FRAM: %lu.%lu\r\n",
-						fw_backup_info.fw_backup_version & 0xFFFF0000, fw_backup_info.fw_backup_version & 0x0000FFFF);
+	        (unsigned long)((fw_backup_info.fw_backup_version & 0xFFFF0000) >> 16),
+	        (unsigned long)(fw_backup_info.fw_backup_version & 0x0000FFFF));
 	Log(log_buf);
 
 	// Cam parameters in memory
@@ -189,10 +199,6 @@ void LogBoardStatusFull(void)
 	Log(log_buf);
 
 	sprintf(log_buf, "Compression quality: %u\r\n", board_status.delayed_params.compression_quality);
-	Log(log_buf);
-
-	// Ram recovery flag
-	sprintf(log_buf, "Memory recoveries from FRAM: %u.\r\n", board_status.ram_corruption_recovery);
 	Log(log_buf);
 
 

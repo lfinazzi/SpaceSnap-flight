@@ -3,6 +3,3 @@
 ../Core/Src/protection.c:29:10:CalculateCRC32	1
 ../Core/Src/protection.c:34:10:BoardStatusCRC	1
 ../Core/Src/protection.c:56:10:CRC32_Update	3
-../Core/Src/protection.c:69:6:DEBUG_CorruptBoardStatus	1
-../Core/Src/protection.c:76:6:DEBUG_CorruptCompressionTable	1
-../Core/Src/protection.c:83:6:DEBUG_CorruptFRAMStatus	1

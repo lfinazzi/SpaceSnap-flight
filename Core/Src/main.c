@@ -97,9 +97,9 @@ int main(void)
   /* Relocate vector table to application base — Already done in SystemInit(), but no harm to leave this here */
   SCB->VTOR = 0x08004000UL;
 
-  uint8_t ignore_flag = 0;							// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
+  uint8_t ignore_flag = 0;					// Used to only transmit "Waiting for reset" in debug UART the first time you enter STATE_IGNORE
   uint32_t timeout_start = 0;
-
+  uint32_t telemetry_save_counter = 0;		// Counter used to save telemtery to FRAM periodically
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -144,6 +144,10 @@ int main(void)
   LoadBoardStatusFRAM();
   board_status.uptime_total += board_status.uptime_session / 1000;					// Loads the previous uptime to the total_uptime variable
 
+  // Need this two lines to persist boot status
+  CommitBoardStatus();
+  SaveBoardStatusFRAM();
+
   CheckResetCause();	// Checks last reset cause and loads it in board_status
 
   // Clear volatile variables in RAM. These do not persist across resets
@@ -166,7 +170,6 @@ int main(void)
   {
 	  HAL_IWDG_Refresh(&hiwdg); 													// Kick the IWDG once per loop
 	  UpdateStatus();
-	  CommitBoardStatus();			// Calculates the CRC of board_status in program memory, protects before status is saved
 
 	  switch (GetState()) {
 		  case STATE_IDLE:
@@ -201,10 +204,14 @@ int main(void)
 			  current_command_pointer = GetCommand(instr_number);					// Identifies command to execute
 			  cmd_ret = ExecuteCommand(current_command_pointer, instr_opcode);		// Executes command with opcode
 
-			  if (cmd_ret == CMD_SCHEDULED)
+			  if (cmd_ret == CMD_SCHEDULED) {
 				  SetState(STATE_DELAYED_PICTURE);
-			  else
+				  CommitBoardStatus();        		/* re-seal with the new state included */
+				  SaveBoardStatusFRAM();      		/* persist STATE_DELAYED_PICTURE immediately, to never cancel capture on SEU */
+			  }
+			  else {
 				  SetState(STATE_TRANSMIT_RESPONSE);
+			  }
 			  break;
 
 		  // **************************************************************************************************************************************************
@@ -255,8 +262,16 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    SaveBoardStatusFRAM();
-    CommitCompressionTable();    /* seal AFTER save, protects until next loop's save */
+	// This saves telemetry once per second, which is a tradeoff between program memory and FRAM staleness in favor of decreased chance
+	// of FRAM corruption due to unwanted POR when SaveBoardStatusFRAM() is running...
+    telemetry_save_counter++;
+    if (telemetry_save_counter >= TELEMETRY_LOOPS_TO_SAVE_TELEMETRY) {
+	    SaveBoardStatusFRAM();   	// Periodic telemetry persist, can get away with ~1 s (mitigates FRAM corruption due to unwanted POR on write)
+	    CommitBoardStatus();		// Calculates the CRC of board_status in program memory, protects before status is saved
+	    CommitCompressionTable();    /* seal AFTER save, protects until next loop's save */
+	    telemetry_save_counter = 0;
+    }
+
   }
   /* USER CODE END 3 */
 }

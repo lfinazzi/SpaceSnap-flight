@@ -19,54 +19,6 @@
 #define FRAM_CS_LOW()   HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_RESET)
 #define FRAM_CS_HIGH()  HAL_GPIO_WritePin(CS_N_GPIO_Port, CS_N_Pin, GPIO_PIN_SET)
 
-void FRAM_WriteByte(uint32_t addr, uint8_t data)
-{
-    uint8_t buf[5];
-
-    if (addr >= END_OF_FRAM) {
-		Log("FRAM_WriteByte: address out of bounds\r\n");
-		return;
-	}
-
-    // First send WREN
-    FRAM_CS_LOW();
-    buf[0] = FRAM_CMD_WREN;
-    HAL_SPI_Transmit(&hspi2, buf, 1, HAL_MAX_DELAY);
-    FRAM_CS_HIGH();
-
-    // Then write: opcode + 3 addr bytes + data
-    FRAM_CS_LOW();
-    buf[0] = FRAM_CMD_WRITE;
-    buf[1] = (addr >> 16) & 0xFF;  // MSB
-    buf[2] = (addr >>  8) & 0xFF;
-    buf[3] = (addr >>  0) & 0xFF;  // LSB
-    buf[4] = data;
-    HAL_SPI_Transmit(&hspi2, buf, 5, HAL_MAX_DELAY);
-    FRAM_CS_HIGH();
-}
-
-uint8_t FRAM_ReadByte(uint32_t addr)
-{
-    uint8_t buf[4];
-    uint8_t rxdata = 0;
-
-    if (addr >= END_OF_FRAM) {
-		Log("FRAM_ReadByte: address out of bounds\r\n");
-		return 0xFF;    /* return erased value */
-	}
-
-    FRAM_CS_LOW();
-    buf[0] = FRAM_CMD_READ;
-    buf[1] = (addr >> 16) & 0xFF;
-    buf[2] = (addr >>  8) & 0xFF;
-    buf[3] = (addr >>  0) & 0xFF;
-    HAL_SPI_Transmit(&hspi2, buf, 4, HAL_MAX_DELAY);
-    HAL_SPI_Receive(&hspi2, &rxdata, 1, HAL_MAX_DELAY);
-    FRAM_CS_HIGH();
-
-    return rxdata;
-}
-
 uint8_t FRAM_ReadDeviceID(uint8_t *id_buf, uint8_t len)
 {
     uint8_t cmd[2] = {0x9F, 0x00};  // opcode + dummy byte
@@ -106,34 +58,145 @@ void SaveBoardStatusFRAM(void)
 	if (!BoardStatusIntact() || !CompTableIntact()) {
 		Log("RAM corrupt - restoring from FRAM\r\n");
 
-		LoadBoardStatusFRAM();
-		board_status.ram_corruption_recovery++;
+		RecoverBoardStatusFromFRAM();
 		return;
 	}
 
-	/* Write board_status */
-	uint8_t *p = (uint8_t *)&board_status;
-	for (uint32_t i = 0; i < sizeof(board_status_t); i++)
-		FRAM_WriteByte(BOARD_STATUS_START + i, p[i]);
+	/* ---- board_status: write + verify with retry ---- */
+	uint32_t bs_crc = CalculateCRC32((const uint8_t *)&board_status, sizeof(board_status_t));
 
-	/* Write board_status CRC */
-	uint32_t bs_crc = CalculateCRC32((const uint8_t *)&board_status,
-									  sizeof(board_status_t));
-	uint8_t *bs_crc_p = (uint8_t *)&bs_crc;
-	for (uint32_t i = 0; i < sizeof(uint32_t); i++)
-		FRAM_WriteByte(BOARD_STATUS_CRC + i, bs_crc_p[i]);
+	uint8_t bs_verified = 0;
 
-	/* Write compression_table */
-	uint8_t *pc = (uint8_t *)&compression_table;
-	for (uint32_t i = 0; i < sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS; i++)
-		FRAM_WriteByte(COMPRESSION_TABLE_START + i, pc[i]);
+	// In case a write failed, retry the write additional times before giving up
+	for (uint8_t bs_attempt = 0; bs_attempt < FRAM_WRITE_RETRY; bs_attempt++) {
+		SaveBufferFRAM((uint8_t*)&board_status, sizeof(board_status_t), BOARD_STATUS_START);
+		SaveBufferFRAM((uint8_t*)&bs_crc, sizeof(uint32_t), BOARD_STATUS_CRC);
 
-	/* Write compression_table CRC */
+		uint32_t readback = 0;
+		ReadBufferFRAM((uint8_t*)&readback, sizeof(uint32_t), BOARD_STATUS_CRC);
+
+		if (readback == bs_crc) {
+			bs_verified = 1;
+			if (bs_attempt > 0) {
+				board_status.fram_corruption_write_recovery++;   /* only count actual write recoveries */
+			}
+			break;
+		}
+		Log("FRAM board_status write verify failed - retrying\r\n");
+	}
+
+	if (!bs_verified) {
+		Log("FRAM board_status write failed after 3 attempts\r\n");
+		board_status.fram_ok = 0;
+	}
+	else {
+		board_status.fram_ok = 1;		// Recovery was possible
+	}
+
+	/* ---- compression_table: write + verify with retry ---- */
 	uint32_t ct_crc = CalculateCRC32((const uint8_t *)compression_table,
 									  sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS);
-	uint8_t *ct_crc_p = (uint8_t *)&ct_crc;
-	for (uint32_t i = 0; i < sizeof(uint32_t); i++)
-		FRAM_WriteByte(COMPRESSION_TABLE_CRC + i, ct_crc_p[i]);
+
+	uint8_t ct_verified = 0;
+
+	for (uint8_t ct_attempt = 0; ct_attempt < FRAM_WRITE_RETRY; ct_attempt++) {
+		SaveBufferFRAM((uint8_t*)compression_table,
+					   sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS,
+					   COMPRESSION_TABLE_START);
+		SaveBufferFRAM((uint8_t*)&ct_crc, sizeof(uint32_t), COMPRESSION_TABLE_CRC);
+
+		uint32_t readback = 0;
+		ReadBufferFRAM((uint8_t*)&readback, sizeof(uint32_t), COMPRESSION_TABLE_CRC);
+
+		if (readback == ct_crc) {
+			ct_verified = 1;
+			if (ct_attempt > 0) {
+				board_status.fram_corruption_write_recovery++;   /* only count actual write recoveries */
+			}
+			break;
+		}
+		Log("FRAM compression_table write verify failed - retrying\r\n");
+	}
+
+	if (!ct_verified) {
+		Log("FRAM compression_table write failed after 3 attempts\r\n");
+		board_status.fram_ok = 0;
+	}
+	else {
+		board_status.fram_ok = 1;		// Recovery was possible
+	}
+
+}
+
+void RestoreBoardStatusFromFRAM(void)
+{
+	/* ---- Load and verify board_status ---- */
+	ReadBufferFRAM((uint8_t *)&board_status, sizeof(board_status_t), BOARD_STATUS_START);
+
+	uint32_t stored_bs_crc = 0;
+	ReadBufferFRAM((uint8_t *)&stored_bs_crc, sizeof(uint32_t), BOARD_STATUS_CRC);
+
+	uint32_t computed_bs_crc = CalculateCRC32((const uint8_t *)&board_status,
+											   sizeof(board_status_t));
+
+	if (computed_bs_crc != stored_bs_crc) {
+		Log("---------------------------------------------------\r\n");
+		Log("FRAM BOARD STATUS CRC FAIL - USING DEFAULTS\r\n");
+		Log("---------------------------------------------------\r\n");
+		memset(&board_status, 0, sizeof(board_status_t));
+		board_status.compression_ptr_address    		 = PHOTO_DATA_START;
+		board_status.fram_bytes_left            		 = FIRMWARE_BACKUP_START - PHOTO_DATA_START;
+		board_status.cam_params.black_threshold          = BLACK_THRESHOLD_DEFAULT;
+		board_status.cam_params.sensor_analog_gain       = GAIN_ANALOG_DEFAULT;
+		board_status.cam_params.sensor_digital_gain      = GAIN_DIGITAL_DEFAULT;
+		board_status.cam_params.sensor_coarse_exposure   = EXPOSURE_COARSE_DEFAULT;
+		board_status.cam_params.sensor_fine_exposure     = EXPOSURE_FINE_DEFAULT;
+		board_status.delayed_params.num_photos           = BURST_NUM_PHOTOS;
+		board_status.delayed_params.time_between_photos  = BURST_INTERVAL;
+		board_status.delayed_params.perform_compressions = BURST_COMPRESSION;
+		board_status.delayed_params.compression_quality  = BURST_COMPR_QUALITY;
+		board_status.fram_ok = 1;	// Restore performed, healthy
+		board_status.sram_ok = 1;	// Assumed was working, restore doesn't touch SRAM
+		board_status.fram_corruption_defaulted++;	// Increment reset counter for FRAM corruption
+	}
+
+	/* ---- Load and verify compression_table ---- */
+	ReadBufferFRAM((uint8_t *)compression_table,
+					sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS,
+					COMPRESSION_TABLE_START);
+
+	uint32_t stored_ct_crc = 0;
+	ReadBufferFRAM((uint8_t *)&stored_ct_crc, sizeof(uint32_t), COMPRESSION_TABLE_CRC);
+
+	uint32_t computed_ct_crc = CalculateCRC32((const uint8_t *)compression_table,
+											   sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS);
+
+	if (computed_ct_crc != stored_ct_crc) {
+		Log("---------------------------------------------------\r\n");
+		Log("FRAM COMPRESSION TABLE CRC FAIL - USING DEFAULTS\r\n");
+		Log("---------------------------------------------------\r\n");
+		memset(&compression_table, 0,
+			   sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS);
+		board_status.fram_ok = 1;
+		board_status.sram_ok = 1;		// Assumed was working, restore doesn't touch SRAM
+		board_status.fram_corruption_defaulted++;	// Increment reset counter for FRAM corruption
+	}
+	else {
+		/* Table CRC passed - recount valid entries in case board_status
+		 * was reset to defaults above, so compression_count matches
+		 * what is actually in the table */
+		uint16_t count = 0;
+		for (uint16_t i = 0; i < MAX_COMPRESSED_PHOTOS; i++) {
+			if (compression_table[i].valid) count++;
+		}
+		board_status.compression_count = count;
+	}
+
+	// reads backup size and crc from FRAM
+	ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_size, sizeof(uint32_t), FIRMWARE_BACKUP_START);
+	ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_crc32, sizeof(uint32_t), FIRMWARE_BACKUP_START + sizeof(uint32_t));
+	ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_version, sizeof(uint32_t), FIRMWARE_BACKUP_START + 2 * sizeof(uint32_t));
+
 }
 
 
@@ -141,86 +204,21 @@ void LoadBoardStatusFRAM(void)
 {
 	uint8_t ret = TestFRAM();
 
-	if(ret == 0)	// failed
-	{
-        board_status.fram_ok = 0;
-		/* continue */
+	if(ret == 0) { // failed
+        board_status.fram_ok = 0;	// FRAM can't be trusted
 	}
-	else {			// success
-
-		// Normal boot — load saved state
-		uint8_t *p = (uint8_t *)&board_status;
-		for(uint32_t i = 0; i < sizeof(board_status_t); i++)
-			p[i] = FRAM_ReadByte(BOARD_STATUS_START + i);
-
-		uint32_t stored_bs_crc = 0;
-		uint8_t *bs_crc_p = (uint8_t *)&stored_bs_crc;
-		for (uint32_t i = 0; i < sizeof(uint32_t); i++)
-			bs_crc_p[i] = FRAM_ReadByte(BOARD_STATUS_CRC + i);
-
-
-
-		uint32_t computed_bs_crc = CalculateCRC32((const uint8_t *)&board_status,
-		                                                   sizeof(board_status_t));
-
-		if (computed_bs_crc != stored_bs_crc) {
-			Log("FRAM board_status CRC fail - using defaults\r\n");
-			memset(&board_status, 0, sizeof(board_status_t));
-			board_status.compression_ptr_address    		 = PHOTO_DATA_START;
-			board_status.fram_bytes_left            		 = FIRMWARE_BACKUP_START - PHOTO_DATA_START;
-			board_status.cam_params.black_threshold          = BLACK_THRESHOLD_DEFAULT;
-			board_status.cam_params.sensor_analog_gain       = GAIN_ANALOG_DEFAULT;
-			board_status.cam_params.sensor_digital_gain      = GAIN_DIGITAL_DEFAULT;
-			board_status.cam_params.sensor_coarse_exposure   = EXPOSURE_COARSE_DEFAULT;
-			board_status.cam_params.sensor_fine_exposure     = EXPOSURE_FINE_DEFAULT;
-			board_status.delayed_params.num_photos           = BURST_NUM_PHOTOS;
-			board_status.delayed_params.time_between_photos  = BURST_INTERVAL;
-			board_status.delayed_params.perform_compressions = BURST_COMPRESSION;
-			board_status.delayed_params.compression_quality  = BURST_COMPR_QUALITY;
-			board_status.fram_ok = 0;
-		}
-		else
-			board_status.fram_ok = 1;
-
-		uint8_t *pc = (uint8_t *)&compression_table;
-		for(uint32_t i = 0; i < sizeof(compression_index_entry_t)*MAX_COMPRESSED_PHOTOS; i++)
-			pc[i] = FRAM_ReadByte(COMPRESSION_TABLE_START + i);
-
-		uint32_t stored_ct_crc = 0;
-		uint8_t *ct_crc_p = (uint8_t *)&stored_ct_crc;
-		for (uint32_t i = 0; i < sizeof(uint32_t); i++)
-			ct_crc_p[i] = FRAM_ReadByte(COMPRESSION_TABLE_CRC + i);
-
-		uint32_t computed_ct_crc = CalculateCRC32((const uint8_t *)compression_table,
-												   sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS);
-
-		if (computed_ct_crc != stored_ct_crc) {
-			Log("FRAM compression_table CRC fail - clearing table\r\n");
-			memset(&compression_table, 0,
-				   sizeof(compression_index_entry_t) * MAX_COMPRESSED_PHOTOS);
-			board_status.fram_ok = 0;
-		}
-		else {
-			/* Table CRC passed - recount valid entries in case board_status
-			 * was reset to defaults above, so compression_count matches
-			 * what is actually in the table */
-			uint16_t count = 0;
-			for (uint16_t i = 0; i < MAX_COMPRESSED_PHOTOS; i++) {
-				if (compression_table[i].valid) count++;
-			}
-			board_status.compression_count = count;
-		}
-
-		// reads backup size and crc from FRAM
-		ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_size, sizeof(uint32_t), FIRMWARE_BACKUP_START);
-		ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_crc32, sizeof(uint32_t), FIRMWARE_BACKUP_START + sizeof(uint32_t));
-		ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_version, sizeof(uint32_t), FIRMWARE_BACKUP_START + 2*sizeof(uint32_t));
-
+	else { // success
+		RestoreBoardStatusFromFRAM();
 	}
 
 	board_status.boot_count++;
 
-	SetState(board_status.state);
+	// This is to only load a delayed state after boot, but on a fault go to STATE_IDLE
+	uint8_t restored_state = board_status.state;
+	if (restored_state != STATE_DELAYED_PICTURE) {
+	    restored_state = STATE_IDLE;
+	}
+	SetState(restored_state);
 
 	CommitBoardStatus();			// Commits the shadow CRCs on boot
 	CommitCompressionTable();
@@ -229,12 +227,21 @@ void LoadBoardStatusFRAM(void)
 // might take a while
 void EraseFRAM(void)
 {
-	Log("Erasing FRAM writable space... might take a while (approx. 40 s)\r\n");
-	// From 0 to start of FW backup, might take a while
-	for (uint32_t addr = 0x00; addr < FIRMWARE_BACKUP_START; addr++) {
-		FRAM_WriteByte(addr, 0x00);
-		HAL_IWDG_Refresh(&hiwdg);		// kick IWDG to avoid reset
+	Log("Erasing FRAM writable space...\r\n");
 
+	uint8_t zero_chunk[256] = {0};
+	uint32_t addr = 0x00;
+
+	// Writes zero in FRAM upto FIRMWARE_BACKUP_START in chunks for less SPI transactions
+	while (addr < FIRMWARE_BACKUP_START) {
+	    uint32_t chunk_size = ((FIRMWARE_BACKUP_START - addr) < sizeof(zero_chunk))		// Protects the firmware region
+	                          ? (FIRMWARE_BACKUP_START - addr)
+	                          : sizeof(zero_chunk);
+
+	    SaveBufferFRAM(zero_chunk, chunk_size, addr);
+	    HAL_IWDG_Refresh(&hiwdg);    // kick IWDG once per 256-byte chunk instead of per byte
+
+	    addr += chunk_size;
 	}
 
 	memset(&board_status, 0, sizeof(board_status_t));													// reset board status
@@ -257,6 +264,9 @@ void EraseFRAM(void)
 	board_status.delayed_params.perform_compressions = BURST_COMPRESSION;
 	board_status.delayed_params.compression_quality = BURST_COMPR_QUALITY;
 
+	board_status.fram_ok = 1;		// newly erased FRAM
+	board_status.sram_ok = 1;   	// assumed working - erase doesn't affect SRAM
+
 	CommitCompressionTable();
 	CommitBoardStatus();
 
@@ -264,17 +274,13 @@ void EraseFRAM(void)
 	return;
 }
 
+// To write compressed photos and status
 void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
 {
     uint8_t cmd[4];
 
-    if (fram_address < PHOTO_DATA_START) {
-		Log("SaveBufferFRAM: address below PHOTO_DATA_START\r\n");
-		board_status.fram_ok = 0;
-		return;
-	}
-	if (fram_address + size > FIRMWARE_BACKUP_START) {
-		Log("SaveBufferFRAM: address would overflow into backup region\r\n");
+    if (fram_address < BOARD_STATUS_START || fram_address + size > FIRMWARE_BACKUP_START) {
+		Log("SaveBufferFRAM: address out of region bounds\r\n");
 		board_status.fram_ok = 0;
 		return;
 	}
@@ -298,7 +304,6 @@ void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
     FRAM_CS_HIGH();
 }
 
-
 void ReadBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
 {
     uint8_t cmd[4];
@@ -315,12 +320,21 @@ void ReadBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
 
 void EraseCompressions(void)
 {
-	Log("Erasing compressions in memory... might take a while (approx. 40 s)\r\n");		// Takes approximately 40 s
-	// From PHOTO_DATA_START to start of FW backup, might take a while
-	for (uint32_t addr = PHOTO_DATA_START; addr < FIRMWARE_BACKUP_START; addr++) {
-		FRAM_WriteByte(addr, 0x00);
-		HAL_IWDG_Refresh(&hiwdg);		// kick IWDG to avoid reset
+	Log("Erasing compressions in memory...\r\n");		// Takes approximately 40 s
 
+	uint8_t zero_chunk[256] = {0};
+	uint32_t addr = PHOTO_DATA_START;
+
+	// From PHOTO_DATA_START to start of FW backup, might take a while
+	while (addr < FIRMWARE_BACKUP_START) {
+		uint32_t chunk_size = ((FIRMWARE_BACKUP_START - addr) < sizeof(zero_chunk))		// Protects the firmware region
+							  ? (FIRMWARE_BACKUP_START - addr)
+							  : sizeof(zero_chunk);
+
+		SaveBufferFRAM(zero_chunk, chunk_size, addr);
+		HAL_IWDG_Refresh(&hiwdg);    // kick IWDG once per 256-byte chunk instead of per byte
+
+		addr += chunk_size;
 	}
 
 	memset(&compression_table, 0, sizeof(compression_index_entry_t)*MAX_COMPRESSED_PHOTOS);				// reset compression table
@@ -335,12 +349,13 @@ void EraseCompressions(void)
 	return;
 }
 
+// To write firmware backup. Only function that can touch it
 void SaveFRAM_Unlocked(uint8_t *buffer, uint32_t size, uint32_t fram_address)
 {
     uint8_t cmd[4];
 
-    if (fram_address < FIRMWARE_IMAGE_START) {
-		Log("SaveFRAM_Unlocked: address below FIRMWARE_IMAGE_START\r\n");
+    if (fram_address < FIRMWARE_BACKUP_START) {
+		Log("SaveFRAM_Unlocked: address below FIRMWARE_BACKUP_START\r\n");
 		board_status.fram_ok = 0;
 		return;
 	}
@@ -381,6 +396,7 @@ CMD_ReturnStatus SaveCompressionToFRAM(void)
 		Log("compression_ptr_address out of bounds - aborting\r\n");
 		board_status.compression_ptr_address = PHOTO_DATA_START;
 		board_status.fram_bytes_left = FIRMWARE_BACKUP_START - PHOTO_DATA_START;
+		board_status.fram_ok = 0;
 		CommitBoardStatus();
 		return CMD_ERROR;
 	}
@@ -432,4 +448,71 @@ CMD_ReturnStatus SaveCompressionToFRAM(void)
 	board_status.compression_buffer_occupied = 1;
 
     return CMD_OK;
+}
+
+CMD_ReturnStatus WriteFirmwareCopy(uint32_t app_start, uint32_t app_size,
+                                   uint32_t dst, uint32_t *out_crc)
+{
+    uint8_t  chunk[256];
+    uint32_t crc      = 0xFFFFFFFF;
+    uint32_t src       = app_start;
+    uint32_t remaining = app_size;
+
+    while (remaining > 0) {
+        uint32_t n = (remaining > sizeof(chunk)) ? sizeof(chunk) : remaining;
+        memcpy(chunk, (uint8_t *)src, n);
+        SaveFRAM_Unlocked(chunk, n, dst);
+
+        for (uint32_t i = 0; i < n; i++) {
+            crc ^= chunk[i];
+            for (int b = 0; b < 8; b++)
+                crc = (crc >> 1) ^ (0xEDB88320UL & (-(int32_t)(crc & 1)));
+        }
+
+        src += n; dst += n; remaining -= n;
+        HAL_IWDG_Refresh(&hiwdg);
+    }
+    *out_crc = ~crc;
+
+    /* Readback verify */
+    uint32_t verify_crc = 0xFFFFFFFF;
+    uint32_t verify_src = dst - app_size;   /* recompute start of this copy */
+    remaining = app_size;
+    while (remaining > 0) {
+        uint32_t n = (remaining > sizeof(chunk)) ? sizeof(chunk) : remaining;
+        ReadBufferFRAM(chunk, n, verify_src);
+        for (uint32_t i = 0; i < n; i++) {
+            verify_crc ^= chunk[i];
+            for (int b = 0; b < 8; b++)
+                verify_crc = (verify_crc >> 1) ^ (0xEDB88320UL & (-(int32_t)(verify_crc & 1)));
+        }
+        verify_src += n; remaining -= n;
+        HAL_IWDG_Refresh(&hiwdg);
+    }
+    verify_crc = ~verify_crc;
+
+    return (verify_crc == *out_crc) ? CMD_OK : CMD_ERROR;
+}
+
+void RecoverBoardStatusFromFRAM(void)
+{
+    RestoreBoardStatusFromFRAM();   /* shared load+verify logic */
+
+    /* Same state restore policy as LoadBoardStatusFRAM(): only
+	 * STATE_DELAYED_PICTURE survives, everything else goes to IDLE.
+	 * Duplicated here intentionally rather than shared, since FRAM is
+	 * the trustworthy source regardless of whether this recovery was
+	 * triggered by a cold boot or a runtime RAM corruption event. */
+
+    // This is the only way to recover this state
+	uint8_t restored_state = board_status.state;
+	if (restored_state != STATE_DELAYED_PICTURE) {
+		restored_state = STATE_IDLE;
+	}
+	SetState(restored_state);
+
+    CommitBoardStatus();
+    CommitCompressionTable();
+
+    board_status.ram_corruption_recovery++;
 }

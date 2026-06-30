@@ -12,6 +12,7 @@
 
 #include "status.h"
 #include "main.h"
+#include "fw_version.h"
 
 /********************************************************************************
  * @brief  Sets the state machine state across all three redundant copies.
@@ -108,38 +109,63 @@ uint32_t CRC32_Update(uint32_t crc, const uint8_t *data, uint32_t len);
 
 	// Functions to inject faults in board_status and compression_table.
 	#ifdef DEBUG_FAULT_INJECTION
+		#ifndef FLIGHT_BUILD		// Double define clause to make absolutely sure this code is not in flight build
 
-	/********************************************************************************
-	 * @brief  Corrupts a single byte of board_status in RAM without updating
-	 *         the shadow CRC, simulating an SRAM SEU on a non-volatile field.
-	 *         The next BoardStatusIntact() check should detect the mismatch
-	 *         and trigger a FRAM restore.
-	 *
-	 * @retval None
-	 ********************************************************************************/
-	void DEBUG_CorruptBoardStatus(void);
+		#define DANGER_FAULT_DELAY_LOOPS   1		// Fault injected 8 seconds after boot, each loop is ~8 ms
+
+		#define DANGER_FAULT_BOARD_STATUS()                                  \
+			do {                                                             \
+				static uint32_t _dbg_count = 0;                              \
+				if (++_dbg_count == DANGER_FAULT_DELAY_LOOPS)                \
+					DEBUG_CorruptBoardStatus();                              \
+			} while (0)
+
+		#define DANGER_FAULT_COMP_TABLE()                                    \
+			do {                                                             \
+				static uint32_t _dbg_count = 0;                              \
+				if (++_dbg_count == DANGER_FAULT_DELAY_LOOPS)                \
+					DEBUG_CorruptCompressionTable();                         \
+			} while (0)
+
+		#define DANGER_FAULT_FRAM()                                          \
+			do {                                                             \
+				static uint32_t _dbg_count = 0;                              \
+				if (++_dbg_count == DANGER_FAULT_DELAY_LOOPS)                \
+					DEBUG_CorruptFRAMStatus();                               \
+			} while (0)
+
+		/********************************************************************************
+		 * @brief  Corrupts a single byte of board_status in RAM without updating
+		 *         the shadow CRC, simulating an SRAM SEU on a non-volatile field.
+		 *         The next BoardStatusIntact() check should detect the mismatch
+		 *         and trigger a FRAM restore.
+		 *
+		 * @retval None
+		 ********************************************************************************/
+		void DEBUG_CorruptBoardStatus(void);
 
 
-	/********************************************************************************
-	 * @brief  Corrupts a single entry of compression_table in RAM without
-	 *         updating the shadow CRC, simulating an SRAM SEU on the index.
-	 *
-	 * @retval None
-	 ********************************************************************************/
-	void DEBUG_CorruptCompressionTable(void);
+		/********************************************************************************
+		 * @brief  Corrupts a single entry of compression_table in RAM without
+		 *         updating the shadow CRC, simulating an SRAM SEU on the index.
+		 *
+		 * @retval None
+		 ********************************************************************************/
+		void DEBUG_CorruptCompressionTable(void);
 
 
-	/********************************************************************************
-	 * @brief  Corrupts board_status directly in FRAM without touching RAM,
-	 *         simulating a FRAM cell upset or failed write. The next
-	 *         LoadBoardStatusFRAM() call should detect the CRC mismatch
-	 *         on boot.
-	 *
-	 * @retval None
-	 ********************************************************************************/
-	void DEBUG_CorruptFRAMStatus(void);
+		/********************************************************************************
+		 * @brief  Corrupts board_status directly in FRAM without touching RAM,
+		 *         simulating a FRAM cell upset or failed write. The next
+		 *         LoadBoardStatusFRAM() call should detect the CRC mismatch
+		 *         on boot.
+		 *
+		 * @retval None
+		 ********************************************************************************/
+		void DEBUG_CorruptFRAMStatus(void);
 
 
+		#endif
 	#endif   /* DEBUG_FAULT_INJECTION */
 
 

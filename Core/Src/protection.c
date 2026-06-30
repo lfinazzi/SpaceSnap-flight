@@ -65,26 +65,27 @@ uint32_t CRC32_Update(uint32_t crc, const uint8_t *data, uint32_t len)
 
 #ifdef DEBUG_FAULT_INJECTION
 
-
-void DEBUG_CorruptBoardStatus(void)
-{
-    board_status.photos_taken ^= 0xFFFF;    /* flip all bits */
-    Log("DEBUG: board_status.photos_taken corrupted\r\n");
-}
-
-
-void DEBUG_CorruptCompressionTable(void)
-{
-    compression_table[0].fram_address ^= 0xFFFFFF;
-    Log("DEBUG: compression_table[0].fram_address corrupted\r\n");
-}
+	void DEBUG_CorruptBoardStatus(void)
+	{
+		board_status.photos_taken ^= 0xFFFF;    /* flip all bits */
+		Log("DEBUG: board_status.photos_taken corrupted\r\n");
+	}
 
 
-void DEBUG_CorruptFRAMStatus(void)
-{
-    uint8_t garbage[4] = {0xDE, 0xAD, 0xBE, 0xEF};
-    SaveFRAM_Unlocked(garbage, 4, BOARD_STATUS_START);
-    Log("DEBUG: FRAM board_status corrupted\r\n");
-}
+	void DEBUG_CorruptCompressionTable(void)
+	{
+		compression_table[0].fram_address ^= 0xFFFFFF;
+		Log("DEBUG: compression_table[0].fram_address corrupted\r\n");
+	}
+
+
+	void DEBUG_CorruptFRAMStatus(void)
+	{
+		uint8_t garbage[4] = {0xDE, 0xAD, 0xBE, 0xEF};
+		SaveBufferFRAM(garbage, 4, BOARD_STATUS_START + 4); 	// First 4 bytes are not included in CRC
+		Log("DEBUG: FRAM board_status corrupted\r\n");
+		HAL_Delay(50);   /* let UART flush */
+		NVIC_SystemReset();   /* immediate reset, no further loop iterations */
+	}
 
 #endif 	/* DEBUG_FAULT_INJECTION */

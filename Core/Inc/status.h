@@ -75,6 +75,8 @@ typedef struct {
     // NON-VOLATILE
     uint8_t state_vote_fail_count;					// Increments by one on app_state majority vote count
     uint16_t ram_corruption_recovery;				// Times board_status in program memory was recovered from FRAM
+    uint8_t fram_corruption_write_recovery;			// Times board_status in program memory was recovered from FRAM
+    uint8_t fram_corruption_defaulted;				// Times board_status or compression table were defaulted due to FRAM CRC mismatch
 
     // Last command - NON-VOLATILE
     uint8_t  last_instruction;           			// last instruction number received
@@ -180,9 +182,10 @@ void LogBoardStatusFull(void);
  *
  * @note   Must be called after every intentional modification of
  *         board_status so the shadow stays in sync. Call sites:
- *         end of ExecuteCommand(), end of UpdateStatus() in the main
- *         loop, and end of LoadBoardStatusFRAM() after a successful
- *         load. Failure to call this after a legitimate modification
+ *         end of ExecuteCommand(), start of program loop after UpdateStatus(),
+ *         and end of LoadBoardStatusFRAM() after a successful
+ *         load. Also called after erasing compressions or FRAM to match when saved
+ *         in main loop. Failure to call this after a legitimate modification
  *         will cause BoardStatusIntact() to falsely detect corruption
  *         on the next check.
  *

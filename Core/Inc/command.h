@@ -58,10 +58,10 @@ typedef enum {
 	CMD_DUMP_FRAM_BIN_ID 			= 0x14,
 
 	/* DANGER ZONE */
-	CMD_ERASE_FRAM_ID			    = 0x88,
+	CMD_ERASE_FRAM_ID			    = 0x88,		// confirmation: 0a 0f 0a 0f 0a
 	CMD_FORCE_RESET_ID			    = 0x89,
-	CMD_ERASE_COMP_ID				= 0x90,
-	CMD_BACKUP_FIRMWARE_ID			= 0x91,
+	CMD_ERASE_COMP_ID				= 0x90,		// confirmation: ba bf ba bf ba
+	CMD_BACKUP_FIRMWARE_ID			= 0x91,		// confirmation: b4 c4 b4 c4 b4
 
 } cmd_id_t;
 
@@ -169,7 +169,7 @@ void delay_kick_wdg(uint16_t seconds);
  *         captured image and, if the count number exceeds black_fraction, retake the
  *         photo, up to a maximum of "tries" attempts, before giving up.
  *
- * @note   Calls PopulateEcho() to write the instruction number and opcode
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
  * @param  opcode Pointer to a 5-byte opcode array:
@@ -206,7 +206,7 @@ CMD_ReturnStatus CMD_TakePicture(uint8_t *opcode);
  *         captured images and, if the count number exceeds black_fraction, retake the
  *         photo, up to a maximum of "tries" attempts, before giving up.
  *
- * @note   Calls PopulateEcho() to write the instruction number and opcode
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
  * @note   This function gets some parameters from board_status.delayed_params,
@@ -238,12 +238,13 @@ CMD_ReturnStatus CMD_TakePictureBurst(uint8_t *opcode);
 /********************************************************************************
  * @brief  Schedules delayed photo captures after N x MIN_INTERVAL minutes.
  *
- * @note   Reads the delay count from opcode[4], records HAL_GetTick() as the
- *         start time, and writes COMMAND_SCHEDULED into tx_buffer[1] for the
- *         OBC response. State machine transitions to STATE_DELAYED_PICTURE
- *         via the CMD_SCHEDULED return value.
+ * @note   Reads the delay count from opcode[4], records the current
+ *         board timestamp (uptime_total + uptime_session/1000) as
+ *         delayed_start, and writes COMMAND_SCHEDULED into tx_buffer[1]
+ *         for the OBC response. State machine transitions to
+ *         STATE_DELAYED_PICTURE via the CMD_SCHEDULED return value.
  *
- * @note   Calls PopulateEcho() to write the instruction number and opcode
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
  * @note   This command schedules delayed photos (up to 5, due to raw buffer
@@ -289,7 +290,7 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode);
  *         hex-dump the full pixel data (L * H * sizeof(uint16_t) bytes) over
  *         UART4. This can take a while given the size of a full raw frame.
  *
- * @note   Calls PopulateEcho() to write the instruction number and opcode
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
  *         NOTE: opcode[] is declared as uint16_t[OPCODE_SIZE] in raw_photo_t,
@@ -317,7 +318,7 @@ CMD_ReturnStatus CMD_DumpRaw(uint8_t *opcode);
  *         DumpCompressedBuffer() to hex-dump the compressed JPEG data over
  *         UART4.
  *
- * @note   Calls PopulateEcho() to write the instruction number and opcode
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
  *         NOTE: opcode[] is declared as uint16_t[OPCODE_SIZE] in raw_photo_t,
@@ -346,7 +347,7 @@ CMD_ReturnStatus CMD_DumpCompressed(uint8_t *opcode);
  *         corresponding field in cam_params. Idx 0 is reserved to put all
  *         parameters to default values.
  *
- * @note   Calls PopulateEcho() to write the instruction number and opcode
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
  * @param  opcode opcode[0]: index of the parameter to change (0 = reset all to defaults)
@@ -374,7 +375,7 @@ CMD_ReturnStatus CMD_ChangeCamParams(uint8_t *opcode);
  *         board_status.compression_count, compressions_done, and sets
  *         compression_buffer_occupied.
  *
- * @note   Calls PopulateEcho() to write the instruction number and opcode
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
  * @param  opcode opcode[0]: raw buffer selected
@@ -398,7 +399,7 @@ CMD_ReturnStatus CMD_CompressRawPhoto(uint8_t *opcode);
  *         erasure from a corrupted/garbled command. Calls EraseFRAM(), which
  *         performs the erase synchronously before returning.
  *
- * @note   Calls PopulateEcho() to write the instruction number and opcode
+ * @note   Calls CMD_PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
  * @param  opcode Must exactly equal {0x0A, 0x0F, 0x0A, 0x0F, 0x0A} for the
@@ -560,7 +561,7 @@ CMD_ReturnStatus CMD_SendCompHeader(uint8_t *opcode);
  *         Calls PopulateEcho() to write the instruction number and opcode
  *         into tx_buffer for ground station acknowledgement.
  *
- * @param  opcode Must exactly equal {0xBA, 0xBF, 0x0A, 0x0F, 0x0A} for the
+ * @param  opcode Must exactly equal {0xBA, 0xBF, 0xBA, 0xBF, 0xBA} for the
  *                erase to proceed.
  *
  * @return CMD_OK on success.
@@ -621,25 +622,26 @@ CMD_ReturnStatus CMD_DumpAllFRAM(uint8_t *opcode);
 
 /********************************************************************************
  * @brief  Backs up the application firmware image from internal flash to
- *         the FRAM backup region, then verifies the write by reading back
- *         and recomputing the CRC32.
+ *         the FRAM backup region as two redundant copies, then verifies
+ *         each copy by reading back and recomputing the CRC32.
  *
  * @note   Requires an exact 5-byte confirmation opcode (0xB4 0xC4 0xB4
  *         0xC4 0xB4) to prevent accidental invocation. Derives the
  *         application image bounds from the linker-exported symbols
- *         _app_flash_start and _app_flash_end, streams the image from
- *         memory-mapped flash to FRAM in 256-byte chunks via
- *         SaveFRAM_Unlocked(), and computes a running zlib-compatible
- *         CRC32 (poly 0xEDB88320, init/final XOR 0xFFFFFFFF) matching
- *         the bootloader's CRC32_Calculate(). On completion, writes
- *         app_size and the computed CRC32 to the FRAM backup header
- *         (fw_backup_info at FIRMWARE_BACKUP_START). Then reads the
- *         image back from FRAM and recomputes the CRC32 to confirm the
- *         data was stored correctly, catching SPI/FRAM write faults that
- *         a write-then-trust approach would miss. IWDG is refreshed
- *         between chunks in both passes. Returns CMD_ERROR without
- *         updating the header if app_size is out of range or the
- *         readback CRC mismatches.
+ *         _app_flash_start and _app_flash_end. Writes two independent
+ *         copies via WriteFirmwareCopy(): copy A at FIRMWARE_IMAGE_A_START
+ *         and copy B at FIRMWARE_IMAGE_B_START. Each copy is streamed in
+ *         256-byte chunks via SaveFRAM_Unlocked() with a running
+ *         zlib-compatible CRC32 (poly 0xEDB88320, init/final XOR
+ *         0xFFFFFFFF) matching the bootloader's CRC32_Calculate(). After
+ *         each copy the image is read back from FRAM and the CRC is
+ *         recomputed to catch SPI/FRAM write faults. Only after both
+ *         copies are verified does the function write the fw_backup_info
+ *         header (app_size, CRC32, version) to both
+ *         FIRMWARE_BACKUP_A_START and FIRMWARE_BACKUP_B_START. IWDG is
+ *         refreshed between chunks. Returns CMD_ERROR without updating
+ *         either header if app_size is out of range or either readback
+ *         CRC mismatches.
  *
  * @param  opcode   Pointer to the 5-byte opcode field from the AirMAC
  *                  frame. Must exactly match the confirmation sequence
@@ -648,7 +650,7 @@ CMD_ReturnStatus CMD_DumpAllFRAM(uint8_t *opcode);
  * @retval CMD_ReturnStatus   CMD_OK on success. CMD_CONFIRM_FAILED if
  *                            the confirmation sequence does not match.
  *                            CMD_ERROR if app_size is out of range or
- *                            the FRAM readback CRC does not match the
+ *                            either FRAM readback CRC does not match the
  *                            computed CRC.
  ********************************************************************************/
 CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode);
