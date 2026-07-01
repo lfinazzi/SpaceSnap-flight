@@ -192,10 +192,15 @@ void RestoreBoardStatusFromFRAM(void)
 		board_status.compression_count = count;
 	}
 
-	// reads backup size and crc from FRAM
-	ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_size, sizeof(uint32_t), FIRMWARE_BACKUP_START);
-	ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_crc32, sizeof(uint32_t), FIRMWARE_BACKUP_START + sizeof(uint32_t));
-	ReadBufferFRAM((uint8_t *)&fw_backup_info.fw_backup_version, sizeof(uint32_t), FIRMWARE_BACKUP_START + 2 * sizeof(uint32_t));
+	// reads backup A size, crc and version from FRAM
+	ReadBufferFRAM((uint8_t *)&fw_backup_info_a.fw_backup_size, sizeof(uint32_t), FIRMWARE_BACKUP_A_START);
+	ReadBufferFRAM((uint8_t *)&fw_backup_info_a.fw_backup_crc32, sizeof(uint32_t), FIRMWARE_BACKUP_A_START + sizeof(uint32_t));
+	ReadBufferFRAM((uint8_t *)&fw_backup_info_a.fw_backup_version, sizeof(uint32_t), FIRMWARE_BACKUP_A_START + 2 * sizeof(uint32_t));
+
+	// reads backup B size, crc and version from FRAM
+	ReadBufferFRAM((uint8_t *)&fw_backup_info_b.fw_backup_size, sizeof(uint32_t), FIRMWARE_BACKUP_B_START);
+	ReadBufferFRAM((uint8_t *)&fw_backup_info_b.fw_backup_crc32, sizeof(uint32_t), FIRMWARE_BACKUP_B_START + sizeof(uint32_t));
+	ReadBufferFRAM((uint8_t *)&fw_backup_info_b.fw_backup_version, sizeof(uint32_t), FIRMWARE_BACKUP_B_START + 2 * sizeof(uint32_t));
 
 }
 
@@ -302,6 +307,8 @@ void SaveBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
     HAL_SPI_Transmit(&hspi2, buffer, size, HAL_MAX_DELAY);
 
     FRAM_CS_HIGH();
+
+    board_status.last_fram_write_address = fram_address;   // record last write address
 }
 
 void ReadBufferFRAM(uint8_t *buffer, uint32_t size, uint32_t fram_address)
@@ -383,6 +390,8 @@ void SaveFRAM_Unlocked(uint8_t *buffer, uint32_t size, uint32_t fram_address)
     HAL_SPI_Transmit(&hspi2, buffer, size, HAL_MAX_DELAY);
 
     FRAM_CS_HIGH();
+
+    board_status.last_fram_write_address = fram_address;   // record last write address
 }
 
 CMD_ReturnStatus SaveCompressionToFRAM(void)

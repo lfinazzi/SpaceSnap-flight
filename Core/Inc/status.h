@@ -77,6 +77,7 @@ typedef struct {
     uint16_t ram_corruption_recovery;				// Times board_status in program memory was recovered from FRAM
     uint8_t fram_corruption_write_recovery;			// Times board_status in program memory was recovered from FRAM
     uint8_t fram_corruption_defaulted;				// Times board_status or compression table were defaulted due to FRAM CRC mismatch
+    uint8_t fw_backup_mismatch;						// Flag goes to one when there is mismatch between FW backup A and B. Modified live on CMD_GetStatus()
 
     // Last command - NON-VOLATILE
     uint8_t  last_instruction;           			// last instruction number received
@@ -91,11 +92,17 @@ typedef struct {
     // Compression FRAM memory tracking - NON-VOLATILE
     uint32_t compression_ptr_address; 				// Address for next compression in FRAM
     uint16_t compression_count;         			// compressions saved in FRAM
-    uint32_t fram_bytes_left;						// Bytes left to save compressions in FRAM
 
     // SRAM memory status - VOLATILE
     uint8_t raw_buffer_occupied[RAW_PHOTO_COUNT];  // is raw buffer with index i in use?
     uint8_t compression_buffer_occupied;      		// is compression buffer in use?
+
+    // NON-Volatile
+    uint32_t fram_bytes_left;						// Bytes left to save compressions in FRAM
+
+    // Last address written in FRAM, to catch errors. TODO: Anything else? This variable gets overwritten every main loop to where compression table is
+    // so it is not incredibly useful - VOLATILE
+    uint32_t last_fram_write_address;
 
     // ADC readings
     uint32_t  mcu_temp;								// MCU Temp reading of MCU with ADC
@@ -107,9 +114,9 @@ typedef struct {
     // Delayed photo params
     delayed_params_t delayed_params;				// Parameters that can be changed for delayed photo burst capturing
 
-    uint32_t delayed_start;							// Board timestamp when delayed request started (seconds)
     uint8_t delayed_intervals;						// Minutes after start to execute photo capture (mins)
     uint8_t delayed_flag;							// Indicates if instruction was not requested in this boot session
+    uint32_t delayed_start;							// Board timestamp when delayed request started (seconds)
 
     // State tracking
     app_state_t state;								// Tracks actual board state, system can recover in STATE_SCHEDULED in case of power off
@@ -127,8 +134,11 @@ extern board_status_t board_status;
 // Compression table
 extern compression_index_entry_t compression_table[MAX_COMPRESSED_PHOTOS];
 
-// Fw backup info
-extern fw_backup_info_t fw_backup_info;
+// Fw backup info A
+extern fw_backup_info_t fw_backup_info_a;
+
+// Fw backup info B
+extern fw_backup_info_t fw_backup_info_b;
 
 
 /********************************************************************************

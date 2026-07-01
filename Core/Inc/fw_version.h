@@ -11,7 +11,7 @@
 #define __FW_VERSION_H__
 
 #define VERSION_MAJOR		(uint16_t)(1U)
-#define VERSION_MINOR		(uint16_t)(0U)
+#define VERSION_MINOR		(uint16_t)(1U)
 
 #define FLIGHT_BUILD
 //#define DEBUG_FAULT_INJECTION

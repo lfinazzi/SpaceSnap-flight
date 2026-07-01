@@ -283,6 +283,8 @@ CMD_ReturnStatus WriteFirmwareCopy(uint32_t app_start, uint32_t app_size,
  *         CRC mismatch, distinct from fram_corruption_recovery which
  *         tracks write-retry successes in SaveBoardStatusFRAM().
  *
+ * @note   Also reads the fw_backup_info for backup A and B.
+ *
  * @retval None
  ********************************************************************************/
 void RestoreBoardStatusFRAM(void);

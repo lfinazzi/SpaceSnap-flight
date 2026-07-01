@@ -97,13 +97,15 @@ Both cameras share a single DCMI bus and I2C bus (I2C2). Only one camera is powe
 | Address | Content |
 |---------|---------|
 | `0x000000` | `board_status_t` struct (104 B) |
-| `0x000068` | CRC32 of `board_status_t` |
-| `0x00006C` | Compression index table (100 × 9 B entries) |
-| `0x0003F0` | CRC32 of compression index table |
-| `0x0003F4` | Compressed JPEG archive (~1.75 MB) |
-| `0x1C0000` | Firmware backup region (256 KB reserved — see [Radiation & SEU Protection](#radiation--seu-protection)) |
+| `0x000064` | CRC32 of `board_status_t` (4 B) |
+| `0x000068` | Compression index table (40 × 12 B entries, 480 B) |
+| `0x000248` | CRC32 of compression index table (4 B) |
+| `0x00024C` | Compressed JPEG archive (~1.79 MB) |
+| `0x1C0000` | Firmware backup copy A — header (12 B) + image (≤ 127.99 KB) |
+| `0x1E0000` | Firmware backup copy B — header (12 B) + image (≤ 127.99 KB) |
+| `0x200000` | End of FRAM |
 
-`board_status_t` and the compression index table are each followed immediately by a CRC32, verified on every load from FRAM. See [Radiation & SEU Protection](#radiation--seu-protection) for the full integrity chain.
+`board_status_t` and the compression index table are each followed immediately by a CRC32, verified on every load from FRAM. The firmware backup region is split into two independent 128 KB copies (A at `0x1C0000`, B at `0x1E0000`), each with its own 12-byte header (`fw_backup_size`, `fw_backup_crc32`, `fw_backup_version`) followed by the image data. See [Radiation & SEU Protection](#radiation--seu-protection) for the full integrity chain.
 
 ### Communication — RS-485 AirMAC
 
@@ -371,14 +373,15 @@ The `board_status_t` struct is persisted in FRAM and updated after every signifi
 - **Reset counters:** IWDG, low-power, software, POR, pin reset, unknown; `last_reset_cause` code from the most recent boot.
 - **Memory flags:** FRAM and SRAM initialisation health.
 - **SEU/corruption counters:** `ram_corruption_recovery` (RAM shadow CRC mismatches corrected at runtime), `fram_corruption_write_recovery` (FRAM write retries that eventually succeeded), `fram_corruption_defaulted` (FRAM CRC failures that forced a reset to safe defaults), `state_vote_fail_count` (majority-vote disagreements).
+- **Firmware backup health:** `fw_backup_mismatch` — set to `0xFF` if copy A and copy B headers differ in size or CRC at the time of `CMD_GetStatus`; `0x00` if they match. Both headers are re-read directly from FRAM on every `CMD_GetStatus` call to avoid stale boot-time values.
 - **Last command:** instruction ID, status code, opcode bytes.
 - **Operation counters:** photos taken, compressions performed, images rejected by black filter.
 - **ADC readings:** MCU internal temperature, VREFINT (supply voltage reference).
-- **FRAM archive state:** write pointer, compressed image count, bytes remaining.
+- **FRAM archive state:** write pointer, compressed image count, bytes remaining, `last_fram_write_address` (address of the most recent FRAM write — TODO: consider replacing with a more operationally useful field such as `last_compression_fram_address` or a session activity counter in a future firmware revision).
 - **Camera parameters (`cam_params`):** black threshold, analog gain, digital gain, coarse and fine exposure. Persisted so manual settings survive reboots.
 - **Burst parameters (`delayed_params`):** number of photos, inter-shot interval, compression flag, compression quality.
 
-The `fw_backup_info_t` struct (also transmitted with `CMD_GetStatus`) tracks the firmware image stored in the FRAM backup region: `fw_backup_size`, `fw_backup_crc32`, and `fw_backup_version`.
+The `fw_backup_info_t` struct (also transmitted with `CMD_GetStatus`, reflecting copy A) tracks the firmware image stored in the FRAM backup region: `fw_backup_size`, `fw_backup_crc32`, and `fw_backup_version`.
 
 ---
 
@@ -452,9 +455,11 @@ The FRAM write pointer for the photo archive is sanity-checked against `[PHOTO_D
 
 `SaveBufferFRAM()` (metadata + photo archive region) and `SaveFRAM_Unlocked()` (firmware backup region exclusively) each enforce non-overlapping address ranges at the point of write, independent of any caller-side logic. A corrupted address argument reaching either function — from any cause — is rejected before any SPI transaction occurs, rather than relying solely on every call site getting its own bounds-checking right.
 
-**8. Dual firmware backup (application side)**
+**8. Dual firmware backup**
 
-`CMD_BackupFirmware` writes the application flash image to **two independent 128 KB regions** in FRAM, each verified by full readback CRC before its header is committed. Both copies should produce identical CRCs since they are written from the same flash source in the same command invocation; a mismatch between the two is logged as a warning. *Bootloader-side fallback logic (attempt copy A, fall back to copy B on CRC failure) is not yet implemented — see Pending Work.*
+`CMD_BackupFirmware` writes the application flash image to **two independent 128 KB regions** in FRAM (copy A at `0x1C0000`, copy B at `0x1E0000`), each verified by full readback CRC before its header is committed. Both copies are written from the same flash source in the same command invocation and should always produce identical CRCs. `CMD_GetStatus` re-reads both headers fresh from FRAM on every call and sets `board_status.fw_backup_mismatch = 0xFF` if they differ — giving the ground a persistent, downlinkable signal that one copy may be degraded and `CMD_BackupFirmware` should be re-issued.
+
+The bootloader reads both headers at every boot and validates the current flash image against copy A's stored CRC. On mismatch it attempts to restore from copy A, then falls back to copy B if copy A's restore also fails. Only if both copies produce a CRC-mismatched restore does the bootloader halt via `Error_Handler()`. This means two independent FRAM corruption events are required to render the payload unbootable — a substantially stronger guarantee than a single-copy backup.
 
 ---
 
@@ -474,6 +479,8 @@ The FRAM write pointer for the photo archive is sanity-checked against `[PHOTO_D
 | `boot_count` lost to a reset occurring within seconds of boot | Immediate save after `LoadBoardStatusFRAM()`, not deferred to the periodic interval |
 | A scheduled delayed photo lost to a reset occurring within seconds of scheduling | Immediate save on `SetState(STATE_DELAYED_PICTURE)`, validated with worst-case timing (fault injected on the very first loop iteration after the transition — see Test 8) |
 | Firmware backup image corrupted at write time | Full-image readback CRC verification, header only committed after verification passes; two independent copies written |
+| One firmware backup copy silently corrupted after writing | `fw_backup_mismatch` flag set in `board_status` on next `CMD_GetStatus`, visible in downlinked telemetry; ground re-issues `CMD_BackupFirmware` to restore redundancy |
+| Flash image corrupted at boot time, one FRAM backup copy also corrupted | Bootloader tries copy A first, falls back to copy B; both copies must independently fail before halting |
 
 ### What Is NOT Protected
 
@@ -486,7 +493,6 @@ This list is deliberately explicit. These are known, accepted gaps — either be
 - **Raw photo and compressed photo header CRCs are computed but not verified.** Both `raw_photo_t` and `compressed_photo_t` carry a `header_crc` field, populated at capture/compression time, but no command currently checks it before transmitting header data to the ground (`CMD_SendRawHeader`, `CMD_DumpRaw`, `CMD_SendCompHeader`, `CMD_DumpCompressed`). A corrupted SRAM header would be downlinked as-is. Deliberately deprioritised: SRAM is significantly larger than the protected FRAM structs, the consequence of a corrupted header (wrong timestamp/designator on one photo) is low relative to `board_status`/`compression_table` corruption, and the JPEG pixel data itself is unaffected either way.
 - **Pixel data integrity.** No CRC protects the actual image payload in either the raw SRAM buffers or the compressed JPEG data in FRAM. A corrupted pixel would simply appear as a visual artifact in the downlinked image; no detection or correction is attempted.
 - **Multi-bit / multiple-cell upsets (MCU/MBU).** All CRC-based detection in this design assumes single-bit-flip-class corruption is the dominant failure mode, consistent with the FRAM peripheral-logic and SRAM SEU literature for this mission's orbit and shielding. CRC32 cannot distinguish all possible multi-bit corruption patterns from a valid message (a sufficiently adversarial multi-bit pattern could theoretically produce a CRC collision), though this is an extremely low-probability concern for naturally-occurring radiation-induced upsets as opposed to deliberately crafted data.
-- **Bootloader-side dual-backup fallback.** The application writes two independent firmware backup copies (Protection 8, above), but the bootloader does not yet attempt copy B if copy A's CRC fails — it currently only knows about a single backup region. This is the last item on the pending work list.
 
 ### Probability Estimate (SRAM SEU)
 
@@ -520,5 +526,7 @@ All tests below were performed using temporary, code-level fault injection helpe
 
 ## Pending Work
 
+- **Self-healing firmware backup repair** — The bootloader falls back from copy A to copy B on CRC failure, but does not currently repair the bad copy from the good one after a successful fallback boot. Without repair, a single copy-A corruption permanently degrades redundancy to one copy until the ground re-issues `CMD_BackupFirmware`. Ground visibility via `fw_backup_mismatch` provides the signal needed for ground-initiated repair; autonomous repair could be added to the bootloader if mission requirements justify it.
+- **SPI HAL return-code checking** — `SaveBufferFRAM()`, `ReadBufferFRAM()`, and `SaveFRAM_Unlocked()` do not currently check the `HAL_StatusTypeDef` return of the underlying SPI transactions. Substantially mitigated by the existing write-readback-CRC-retry mechanism; a HAL-level failure on a write path will be caught by the retry loop's CRC mismatch. Unmitigated only for read paths that lack a CRC wrapper (e.g. arbitrary photo data fetched for downlink).
 - **Address-byte and CS-timing fault tolerance** — No specific mitigation beyond the general write-verify-retry pattern protects against SPI address corruption in transit or chip-select timing glitches mid-transaction. Not tested.
 - **Photo header CRC verification** — `header_crc` is computed and stored for both raw and compressed photo headers but never checked before downlink. Deliberately deprioritised; see *What Is NOT Protected*.

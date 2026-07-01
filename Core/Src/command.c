@@ -381,8 +381,22 @@ CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode)
 
     _Static_assert(sizeof(board_status_t) + sizeof(fw_backup_info_t) <= AIRMAC_SIZE - DATA_HEADER_SIZE, "board_status_t too large for tx_buffer");	// static assert for airmac_board_status_t size
 
+    // Reads FRAM with current values, to avoid staleness, because these were read only at boot
+    ReadBufferFRAM((uint8_t *)&fw_backup_info_a, sizeof(fw_backup_info_t), FIRMWARE_BACKUP_A_START);
+    ReadBufferFRAM((uint8_t *)&fw_backup_info_b, sizeof(fw_backup_info_t), FIRMWARE_BACKUP_B_START);
+
+    // Reads the status of CRCs between backups A and B in memory
+    if (fw_backup_info_a.fw_backup_crc32 != fw_backup_info_b.fw_backup_crc32 ||
+        fw_backup_info_a.fw_backup_size  != fw_backup_info_b.fw_backup_size) {
+        Log("WARNING: firmware backup copies A and B do not match!\r\n");
+        board_status.fw_backup_mismatch = 0xFF;   // visible in telemetry
+    }
+    else {
+        board_status.fw_backup_mismatch = 0x00;
+    }
+
     memcpy(&tx_buffer[DATA_HEADER_SIZE], &board_status, sizeof(board_status_t));		// outputs the abridged board status to the tx_buffer
-    memcpy(&tx_buffer[DATA_HEADER_SIZE + sizeof(board_status_t)], &fw_backup_info, sizeof(fw_backup_info_t));	// outputs the fw backup info to the tx_buffer
+    memcpy(&tx_buffer[DATA_HEADER_SIZE + sizeof(board_status_t)], &fw_backup_info_a, sizeof(fw_backup_info_t));	// outputs the fw A backup info to the tx_buffer
     LogBoardStatusFull();		// Outputs a summary of the board status to UART4 (debug) for human viewing
 
     // No need to log the instr + opcode, as this gives board status with that info
@@ -886,12 +900,13 @@ CMD_ReturnStatus CMD_BackupFirmware(uint8_t *opcode)
 	}
 
 	/* Write both headers only after both images verified */
-	fw_backup_info.fw_backup_size    = app_size;
-	fw_backup_info.fw_backup_crc32   = final_crc;
-	fw_backup_info.fw_backup_version = ((uint32_t)VERSION_MAJOR << 16) | (uint32_t)VERSION_MINOR;
+	fw_backup_info_a.fw_backup_size    = app_size;
+	fw_backup_info_a.fw_backup_crc32   = final_crc;
+	fw_backup_info_a.fw_backup_version = ((uint32_t)VERSION_MAJOR << 16) | (uint32_t)VERSION_MINOR;
 
-	SaveFRAM_Unlocked((uint8_t *)&fw_backup_info, sizeof(fw_backup_info), FIRMWARE_BACKUP_A_START);
-	SaveFRAM_Unlocked((uint8_t *)&fw_backup_info, sizeof(fw_backup_info), FIRMWARE_BACKUP_B_START);
+	// Both backups are assumed to be the same
+	SaveFRAM_Unlocked((uint8_t *)&fw_backup_info_a, sizeof(fw_backup_info_a), FIRMWARE_BACKUP_A_START);
+	SaveFRAM_Unlocked((uint8_t *)&fw_backup_info_a, sizeof(fw_backup_info_a), FIRMWARE_BACKUP_B_START);
 
 	sprintf(log_buf, "Dual backup complete: size=%lu crc=0x%08lX, version=%u.%u\r\n",
 			app_size, final_crc, VERSION_MAJOR, VERSION_MINOR);

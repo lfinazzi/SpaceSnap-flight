@@ -1,7 +1,7 @@
-../Core/Src/status.c:30:6:UpdateStatus	1
-../Core/Src/status.c:36:6:LogBoardStatus	1
-../Core/Src/status.c:53:6:LogBoardStatusFull	3
-../Core/Src/status.c:211:6:CommitBoardStatus	1
-../Core/Src/status.c:216:6:CommitCompressionTable	1
-../Core/Src/status.c:223:9:BoardStatusIntact	1
-../Core/Src/status.c:228:9:CompTableIntact	1
+../Core/Src/status.c:33:6:UpdateStatus	1
+../Core/Src/status.c:39:6:LogBoardStatus	1
+../Core/Src/status.c:56:6:LogBoardStatusFull	3
+../Core/Src/status.c:220:6:CommitBoardStatus	1
+../Core/Src/status.c:225:6:CommitCompressionTable	1
+../Core/Src/status.c:232:9:BoardStatusIntact	1
+../Core/Src/status.c:237:9:CompTableIntact	1

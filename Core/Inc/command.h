@@ -265,18 +265,26 @@ CMD_ReturnStatus CMD_TakePictureDelayed(uint8_t *opcode);
 
 
 /********************************************************************************
- * @brief  Serializes board_status into tx_buffer[1..] for transmission.
+ * @brief  Reads current board status, firmware backup health, and
+ *         serializes both into tx_buffer for transmission to ground.
  *
  * @note   Updates board_status.uptime_session from HAL_GetTick() before
- *         copying. A compile-time static assert verifies that
- *         sizeof(board_status_t) + sizeof(fw_backup_info_t) fits within
- *         tx_buffer (AIRMAC_SIZE - DATA_HEADER_SIZE bytes available). Also
- *         calls LogBoardStatusFull() to print a full field-by-field breakdown of 
- *         board_status over UART4 (debug) for human viewing.
+ *         serializing. Re-reads both firmware backup headers (A and B)
+ *         directly from FRAM rather than relying on the boot-time loaded
+ *         values, ensuring the comparison reflects the current FRAM state
+ *         even if CMD_BackupFirmware was issued during this session.
+ *         Sets board_status.fw_backup_mismatch to 0xFF if copy A and B
+ *         differ in size or CRC, 0x00 if they match. A compile-time
+ *         static assert verifies that sizeof(board_status_t) +
+ *         sizeof(fw_backup_info_t) fits within the AirMAC frame budget
+ *         (AIRMAC_SIZE - DATA_HEADER_SIZE bytes available). Calls
+ *         LogBoardStatusFull() to print a full field-by-field breakdown
+ *         over UART4 for human viewing. fw_backup_info_a is what gets
+ *         downlinked alongside board_status in the response frame.
  *
- * @param  opcode Unused.
+ * @param  opcode   Unused.
  *
- * @return CMD_OK always.
+ * @retval CMD_OK   Always.
  ********************************************************************************/
 CMD_ReturnStatus CMD_GetStatus(uint8_t *opcode);
 

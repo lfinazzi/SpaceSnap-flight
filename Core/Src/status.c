@@ -18,7 +18,10 @@
 // Current board status and info
 board_status_t board_status = {0};
 compression_index_entry_t compression_table[MAX_COMPRESSED_PHOTOS] = {0};		// Compression table in FRAM
-fw_backup_info_t fw_backup_info;		// unmodified on init on purpose, nothing can write this value except CMD_BackupFirmware()
+
+// Information on both backups in FRAM
+fw_backup_info_t fw_backup_info_a;
+fw_backup_info_t fw_backup_info_b;
 
 // State shadow variables for majority vote --> Avoids corruption of state and dangerous behaviour
 uint8_t state_shadow_b = 0;
@@ -140,6 +143,9 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "fram_bytes_left: %lu\r\n", board_status.fram_bytes_left);
 	Log(log_buf);
 
+	sprintf(log_buf, "Last FRAM address written: 0x%06lX\r\n", board_status.last_fram_write_address);
+	Log(log_buf);
+
 	// SRAM buffer occupancy
 	for (uint8_t i = 0; i < RAW_PHOTO_COUNT; i++){
 		sprintf(log_buf, "raw_buffer_%u_occupied: %u\r\n", i+1, board_status.raw_buffer_occupied[i]);
@@ -157,15 +163,18 @@ void LogBoardStatusFull(void)
 	sprintf(log_buf, "MCU Temp: %.1f C\r\n", temp_c);
 	Log(log_buf);
 
-	sprintf(log_buf, "size of application in FRAM: %lu Bytes\r\n", fw_backup_info.fw_backup_size);
+	sprintf(log_buf, "size of application in FRAM: %lu Bytes\r\n", fw_backup_info_a.fw_backup_size);
 	Log(log_buf);
 
-	sprintf(log_buf, "CRC of application in FRAM: 0x%06lX\r\n", fw_backup_info.fw_backup_crc32);
+	sprintf(log_buf, "CRC of application in FRAM: 0x%06lX\r\n", fw_backup_info_a.fw_backup_crc32);
 	Log(log_buf);
 
 	sprintf(log_buf, "Version of application in FRAM: %lu.%lu\r\n",
-	        (unsigned long)((fw_backup_info.fw_backup_version & 0xFFFF0000) >> 16),
-	        (unsigned long)(fw_backup_info.fw_backup_version & 0x0000FFFF));
+	        (unsigned long)((fw_backup_info_a.fw_backup_version & 0xFFFF0000) >> 16),
+	        (unsigned long)(fw_backup_info_a.fw_backup_version & 0x0000FFFF));
+	Log(log_buf);
+
+	sprintf(log_buf, "CRC comparison between backup A and B: %u\r\n", board_status.fw_backup_mismatch);
 	Log(log_buf);
 
 	// Cam parameters in memory
