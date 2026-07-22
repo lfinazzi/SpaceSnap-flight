@@ -16,6 +16,9 @@
 #define NO_OPCODE 									(0U) 		// Command has no opcode
 #define OPCODE_SIZE									(5U) 		// Bytes in command opcode
 
+#define HAS_RETURN									(0U)		// Command has return
+#define NO_RETURN									(1U)		// Command has no return
+
 #define RESPONSE_INIT_BYTE							(171U)		// Start Byte for USS responses
 
 #define COMMAND_SUCCESS								(44U) 		// Command success
@@ -108,6 +111,7 @@ typedef struct {
     command_handler_t handler;        // Function pointer to execute
     int takes_opcode;		      	  // Indicates if instruction takes opcode
     uint8_t return_size;			  // Size in bytes for return
+    uint8_t has_return;				  // Does command have return?
 } command_t;
 
 

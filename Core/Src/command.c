@@ -25,25 +25,25 @@
 
 // Command table — add new entries here, matching the extern declaration in command.h, for variable return size, change here!
 const command_t command_table[] = {
-    { "CMD_TakePicture",        CMD_TAKE_PICTURE_ID,          CMD_TakePicture,         HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-    { "CMD_TakePictureDelayed", CMD_TAKE_PICTURE_DELAYED_ID,  CMD_TakePictureDelayed,  HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-    { "CMD_ChangeCamParams",    CMD_CHANGE_CAM_PARAMS_ID,     CMD_ChangeCamParams,     HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-    { "CMD_CompressRawPhoto",   CMD_COMPRESS_PHOTO_ID,     	  CMD_CompressRawPhoto,    HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-    { "CMD_GetStatus",          CMD_GET_STATUS_ID,            CMD_GetStatus,           NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
-    { "CMD_DumpRaw",   			CMD_DUMP_RAW_ID,     		  CMD_DumpRaw,    		   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   HAS_OPCODE,  AIRMAC_SIZE - HEADER_SIZE},		// confirm needed
-	{ "CMD_DumpCompressed",   	CMD_DUMP_COMPRESSED_ID,       CMD_DumpCompressed,      NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_ForceReset",   		CMD_FORCE_RESET_ID,       	  CMD_ForceReset,          NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_SendRawFrame",   	CMD_SEND_RAW_FRAME_ID,        CMD_SendRawFrame,        HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_SendCompFrame",   	CMD_SEND_COMP_FRAME_ID,       CMD_SendCompFrame,       HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_SendRawHeader",   	CMD_SEND_RAW_HEADER_ID,       CMD_SendRawHeader,       HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_SendCompHeader",   	CMD_SEND_COMP_HEADER_ID,      CMD_SendCompHeader,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_EraseCompressions",  CMD_ERASE_COMP_ID,      	  CMD_EraseCompressions,   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},		// confirm needed
-	{ "CMD_DumpAllSRAM",   		CMD_DUMP_SRAM_BIN_ID,         CMD_DumpAllSRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_DumpAllFRAM",   		CMD_DUMP_FRAM_BIN_ID,         CMD_DumpAllFRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_BackupFirmware",   	CMD_BACKUP_FIRMWARE_ID,       CMD_BackupFirmware,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},		// confirm needed
-	{ "CMD_ChangeBurstParams",  CMD_CHANGE_BURST_PARAMS_ID,   CMD_ChangeBurstParams,   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
-	{ "CMD_TakePictureBurst",   CMD_TAKE_PICTURE_BURST_ID,    CMD_TakePictureBurst,    HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE},
+    { "CMD_TakePicture",        CMD_TAKE_PICTURE_ID,          CMD_TakePicture,         HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+    { "CMD_TakePictureDelayed", CMD_TAKE_PICTURE_DELAYED_ID,  CMD_TakePictureDelayed,  HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, NO_RETURN },
+    { "CMD_ChangeCamParams",    CMD_CHANGE_CAM_PARAMS_ID,     CMD_ChangeCamParams,     HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+    { "CMD_CompressRawPhoto",   CMD_COMPRESS_PHOTO_ID,     	  CMD_CompressRawPhoto,    HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, NO_RETURN },
+    { "CMD_GetStatus",          CMD_GET_STATUS_ID,            CMD_GetStatus,           NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+    { "CMD_DumpRaw",   			CMD_DUMP_RAW_ID,     		  CMD_DumpRaw,    		   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, NO_RETURN },
+    { "CMD_EraseFRAM",   		CMD_ERASE_FRAM_ID,     		  CMD_EraseFRAM,    	   HAS_OPCODE,  AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},	// confirm needed
+	{ "CMD_DumpCompressed",   	CMD_DUMP_COMPRESSED_ID,       CMD_DumpCompressed,      NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE, NO_RETURN },
+	{ "CMD_ForceReset",   		CMD_FORCE_RESET_ID,       	  CMD_ForceReset,          NO_OPCODE , 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+	{ "CMD_SendRawFrame",   	CMD_SEND_RAW_FRAME_ID,        CMD_SendRawFrame,        HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+	{ "CMD_SendCompFrame",   	CMD_SEND_COMP_FRAME_ID,       CMD_SendCompFrame,       HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+	{ "CMD_SendRawHeader",   	CMD_SEND_RAW_HEADER_ID,       CMD_SendRawHeader,       HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+	{ "CMD_SendCompHeader",   	CMD_SEND_COMP_HEADER_ID,      CMD_SendCompHeader,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+	{ "CMD_EraseCompressions",  CMD_ERASE_COMP_ID,      	  CMD_EraseCompressions,   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},	// confirm needed
+	{ "CMD_DumpAllSRAM",   		CMD_DUMP_SRAM_BIN_ID,         CMD_DumpAllSRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, NO_RETURN },
+	{ "CMD_DumpAllFRAM",   		CMD_DUMP_FRAM_BIN_ID,         CMD_DumpAllFRAM,         NO_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, NO_RETURN },
+	{ "CMD_BackupFirmware",   	CMD_BACKUP_FIRMWARE_ID,       CMD_BackupFirmware,      HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, NO_RETURN },	// confirm needed
+	{ "CMD_ChangeBurstParams",  CMD_CHANGE_BURST_PARAMS_ID,   CMD_ChangeBurstParams,   HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, HAS_RETURN},
+	{ "CMD_TakePictureBurst",   CMD_TAKE_PICTURE_BURST_ID,    CMD_TakePictureBurst,    HAS_OPCODE, 	AIRMAC_SIZE - HEADER_SIZE, NO_RETURN },
     // ... add more here
 };
 

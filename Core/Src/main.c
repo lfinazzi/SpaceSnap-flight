@@ -250,7 +250,14 @@ int main(void)
 		  case STATE_TRANSMIT_RESPONSE:
 			  Log("Transmitting buffer\r\n");
 			  Log("---------------------------------------------------\r\n");
-			  TransmitBufferRS485();			// Transmits tx_buffer and resets LS-02
+
+			  if(current_command_pointer->has_return == HAS_RETURN)		// Command returns response
+				  TransmitBufferRS485();								// Transmits tx_buffer and resets LS-02
+			  else {
+				  ClearTxBuffer();
+				  ResetLS02();											// Resets LS-02 even if tx_buffer is not transmitted
+			  }
+
 			  SetState(STATE_IDLE);
 			  break;
 
