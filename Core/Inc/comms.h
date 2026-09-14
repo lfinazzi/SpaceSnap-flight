@@ -22,7 +22,6 @@
 #define LOG_UART_TIMEOUT					(50U)		// Debug UART timeout in ms
 
 #define IGNORE_TIMEOUT_MAX					(20000U) 	// max timeout for LS-02 reset in ms
-#define RESET_DEBOUNCE_TIME					(10U) 		// debounce time to avoid GPIO noise in ms
 
 #define HEADER_SIZE							(8U)		// Header common to all command returns (some ignore this to maximize download size. Example: CMD_SendRawFrame()
 #define DATA_HEADER_SIZE					(2U)		// This is the header size used for commands that download data and ignore HEADER_SIZE
@@ -109,7 +108,7 @@ void TransmitBufferRS485(void);
 /********************************************************************************
  * @brief  Pulses the LS-02 RS-485 reset line to re-enable the module.
  *
- * @note   Drives PC9 high for 10ms via HAL_Delay(), then pulls it low.
+ * @note   Drives PC9 low for 200ms via HAL_Delay(), then pulls it high (IDLE).
  *         Called automatically by TransmitBufferRS485() after each
  *         transmission to restore the LS-02 to its listening state.
  *
@@ -192,8 +191,8 @@ void EnableListenRS485(void);
 /********************************************************************************
  * @brief  Polls the USS RS-485 reset GPIO (PA8) and returns its current state.
  *
- * @return 0 if PA8 is low.
- *         1 if PA8 is high.
+ * @return 0 if PA8 is high (high on IDLE).
+ *         1 if PA8 is low.
  ********************************************************************************/
 int PollUSSReset(void);
 

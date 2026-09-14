@@ -93,9 +93,9 @@ void TransmitBufferRS485(void)
 
 void ResetLS02(void)
 {
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);				// Sets LS-02 reset GPIO high (active)
-	HAL_Delay(10);                                           		// Hold high for 10ms
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);    		// Pull low
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);		// Sets LS-02 reset GPIO low (active)
+	HAL_Delay(200);                                           	// Hold low for 200ms
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);    		// Pull high (IDLE)
 }
 
 CMD_ReturnStatus LoadInstructionBuffer(void)
@@ -190,11 +190,11 @@ int PollUSSReset(void)
 {
 	// Raw GPIO
 	GPIO_PinState raw = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8);
-	if (raw == GPIO_PIN_RESET) {
-		return 0;   // Pin is low
+	if (raw == GPIO_PIN_SET) {
+		return 0;   // Pin is high
 	}
 	else
-		return 1;	// pin is high
+		return 1;	// pin is low
 }
 
 void LogRawFrameDebug(uint8_t slot, uint32_t offset, uint32_t frame_size,

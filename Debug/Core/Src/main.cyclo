@@ -10,5 +10,5 @@
 ../Core/Src/main.c:606:13:MX_USART1_UART_Init	2
 ../Core/Src/main.c:637:13:MX_DMA_Init	1
 ../Core/Src/main.c:655:13:MX_GPIO_Init	1
-../Core/Src/main.c:731:13:MX_FSMC_Init	2
-../Core/Src/main.c:790:6:Error_Handler	1
+../Core/Src/main.c:741:13:MX_FSMC_Init	2
+../Core/Src/main.c:800:6:Error_Handler	1

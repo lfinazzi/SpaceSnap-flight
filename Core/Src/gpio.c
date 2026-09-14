@@ -12,7 +12,7 @@
 
 void GPIO_Init(void)
 {
-	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_RESET);			// Sets LS-02 reset GPIO (PC9) to low, low on startup
+	  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_9, GPIO_PIN_SET);			// Sets LS-02 reset GPIO (PC9) to high, high on startup
 
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);			// RS-485 RE, low on startup (enabled)
 	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);			// RS-485 DE, low on startup (disabled)

@@ -670,7 +670,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, RESET_BAR_Pin|LS02_RS485_RST_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(RESET_BAR_GPIO_Port, RESET_BAR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, IMG_ENA_A_Pin|IMG_ENA_B_Pin|IMG_I2C_ENA_Pin|IMG_ENA_Pin, GPIO_PIN_RESET);
@@ -679,14 +679,17 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, RS485_RE_Pin|RS485_DE_Pin|CS_N_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LS02_RS485_RST_GPIO_Port, LS02_RS485_RST_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOG, MEMO_UB_Pin|MEMO_LB_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : RESET_BAR_Pin LS02_RS485_RST_Pin */
-  GPIO_InitStruct.Pin = RESET_BAR_Pin|LS02_RS485_RST_Pin;
+  /*Configure GPIO pin : RESET_BAR_Pin */
+  GPIO_InitStruct.Pin = RESET_BAR_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(RESET_BAR_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : IMG_ENA_A_Pin IMG_ENA_B_Pin IMG_I2C_ENA_Pin IMG_ENA_Pin */
   GPIO_InitStruct.Pin = IMG_ENA_A_Pin|IMG_ENA_B_Pin|IMG_I2C_ENA_Pin|IMG_ENA_Pin;
@@ -709,10 +712,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(CS_N_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : LS02_RS485_RST_Pin */
+  GPIO_InitStruct.Pin = LS02_RS485_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LS02_RS485_RST_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : USS_RS485_RST_Pin */
   GPIO_InitStruct.Pin = USS_RS485_RST_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(USS_RS485_RST_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : MEMO_UB_Pin MEMO_LB_Pin */
